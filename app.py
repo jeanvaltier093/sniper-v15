@@ -19,10 +19,13 @@ def send_telegram_msg(message):
         pass
 
 # --- CONFIGURATION INTERFACE ---
-st.set_page_config(page_title="Sniper V15.7 - Telegram Direct", layout="wide")
-st_autorefresh(interval=180000, key="datarefresh") # 3 minutes pile
+st.set_page_config(page_title="Sniper V15.8 - Confirmed Signals", layout="wide")
+st_autorefresh(interval=180000, key="datarefresh") # 3 minutes
 
-# --- STRUCTURE DES ACTIFS ---
+# Initialisation de la mémoire des signaux dans la session Streamlit
+if 'previous_signals' not in st.session_state:
+    st.session_state['previous_signals'] = {}
+
 ASSETS = {
     "FOREX": [
         "EURUSD=X", "GBPUSD=X", "USDJPY=X", "AUDUSD=X", "USDCAD=X", "USDCHF=X", "NZDUSD=X",
@@ -36,7 +39,7 @@ ASSETS = {
 }
 
 @st.cache_data(ttl=170)
-def run_sniper_engine():
+def run_confirmed_engine():
     results = []
     all_tickers = [ticker for category in ASSETS.values() for ticker in category]
     
@@ -45,13 +48,14 @@ def run_sniper_engine():
         data_d = yf.download(all_tickers, period="150d", interval="1d", group_by='ticker', progress=False)
     except: return []
 
+    current_alerts = {}
+
     for category, tickers in ASSETS.items():
         for ticker in tickers:
             try:
                 if ticker not in data_m.columns.levels[0] or data_m[ticker].empty: continue
                 df_m, df_d = data_m[ticker].dropna(), data_d[ticker].dropna()
-                if len(df_m) < 30 or len(df_d) < 100: continue
-
+                
                 p_close = float(df_m['Close'].iloc[-1])
                 atr_m = AverageTrueRange(df_m['High'], df_m['Low'], df_m['Close'], 14).average_true_range().iloc[-1]
                 ema_200_d = EMAIndicator(df_d['Close'], 200).ema_indicator().iloc[-1]
@@ -66,9 +70,7 @@ def run_sniper_engine():
                 multiplier = 2.0 if category == "INDICES" else 1.6
                 score, signal, sl, tp, note = 0, "ATTENDRE", 0, 0, ""
 
-                if adx_d < 18: note = "💤 RANGE DAILY"
-                elif (box_h - box_l) > (atr_m * 3.0): note = "⏳ VOLATILITÉ HAUTE"
-                else:
+                if adx_d >= 18 and (box_h - box_l) <= (atr_m * 3.5):
                     trend_up = p_close > ema_200_d
                     if (trend_up and p_di > m_di) or (not trend_up and m_di > p_di): score += 40
                     if ad_m > 25: score += 30
@@ -81,45 +83,45 @@ def run_sniper_engine():
                         elif not trend_up and p_close < (box_l - buffer):
                             signal, sl = "VENTE 🔻", p_close + (atr_m * multiplier)
                             tp = p_close - (sl - p_close) * 2.1
-                        else: note = "⏳ Attente Confirmation"
-                    else: note = "Momentum insuffisant"
+                        else: note = "⏳ Zone de Buffer"
+                    else: note = "Momentum faible"
 
-                # Envoi Telegram si signal validé
+                name = ticker.replace("=X","").replace("=F","").replace("^","")
+                current_alerts[name] = signal
+
+                # LOGIQUE DE CONFIRMATION TELEGRAM
                 if signal != "ATTENDRE":
-                    name = ticker.replace("=X","").replace("=F","").replace("^","")
-                    msg = f"🦅 SNIPER ALERT\n━━━━━━━━━━━━\nActif: {name}\nSignal: {signal}\nScore: {score}%\n━━━━━━━━━━━━\nPrix: {p_close:.5f}\nSL: {sl:.5f}\nTP: {tp:.5f}"
-                    send_telegram_msg(msg)
+                    # On vérifie si le signal était DÉJÀ là au scan précédent
+                    prev_signal = st.session_state['previous_signals'].get(name, "ATTENDRE")
+                    
+                    if signal == prev_signal: # CONFIRMÉ (présent 2 fois de suite)
+                        # Pour ne pas spammer, on peut ajouter une condition ici
+                        msg = f"🦅 SIGNAL CONFIRMÉ (6min)\n━━━━━━━━━━━━\nActif: {name}\nSignal: {signal}\nScore: {score}%\n━━━━━━━━━━━━\nPrix: {p_close:.5f}\nSL: {sl:.5f}\nTP: {tp:.5f}"
+                        send_telegram_msg(msg)
 
                 def f(x): return round(x, 5) if x < 2 else round(x, 2)
                 results.append({
-                    "Catégorie": category, "Actif": ticker.replace("=X","").replace("=F","").replace("^",""),
-                    "SIGNAL": signal, "Score": f"{score}%", "Prix": f(p_close),
+                    "Catégorie": category, "Actif": name, "SIGNAL": signal, 
+                    "Score": f"{score}%", "Prix": f(p_close),
                     "Stop Loss": f(sl) if sl != 0 else "-", "Take Profit": f(tp) if tp != 0 else "-", "Note": note
                 })
             except: continue
+    
+    # Mise à jour de la mémoire pour le prochain scan
+    st.session_state['previous_signals'] = current_alerts
     return results
 
 # --- RENDU ---
-st.title("🦅 Sniper V15.7 - Dashboard & Telegram")
+st.title("🦅 Sniper V15.8 - Haute Précision")
+st.info("Les alertes Telegram ne sont envoyées qu'après 6 minutes de confirmation pour filtrer les faux breakouts.")
 
-data = run_sniper_engine()
+data = run_confirmed_engine()
 if data:
     df = pd.DataFrame(data)
-    
-    # --- TOP PANEL (MISE EN AVANT) ---
     alerts = df[df['SIGNAL'].str.contains('ACHAT|VENTE')]
     if not alerts.empty:
-        st.subheader("🔥 ALERTES DÉTECTÉES")
+        st.subheader("🔥 ALERTES EN COURS (Validées ou en cours de confirmation)")
         st.dataframe(alerts.style.apply(lambda x: ['background-color: #1e8449; color: white' if 'ACHAT' in x.SIGNAL else 'background-color: #942d22; color: white' for i in x], axis=1))
         st.divider()
 
-    # --- TABLEAU GLOBAL ---
-    st.subheader("📊 Surveillance Globale (3 min)")
-    def style_rows(row):
-        bg = '#1e8449' if 'ACHAT' in row.SIGNAL else ('#942d22' if 'VENTE' in row.SIGNAL else '')
-        return [f'background-color: {bg}; color: white' if bg else '' for _ in row]
-    
-    st.table(df.style.apply(style_rows, axis=1))
-    st.caption(f"Dernier scan : {datetime.datetime.now().strftime('%H:%M:%S')}")
-else:
-    st.error("Erreur de connexion aux données.")
+    st.table(df.style.apply(lambda x: ['background-color: #1e8449; color: white' if 'ACHAT' in x.SIGNAL else ('background-color: #942d22; color: white' if 'VENTE' in x.SIGNAL else '') for i in x], axis=1))
