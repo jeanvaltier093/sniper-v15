@@ -1,18 +1,28 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
+import requests
 from ta.trend import EMAIndicator, ADXIndicator
 from ta.volatility import AverageTrueRange
 import datetime
-import pytz
 from streamlit_autorefresh import st_autorefresh
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="Sniper V15.5 - Pro Alerts", layout="wide")
+# --- CONFIGURATION TELEGRAM ---
+TOKEN_TELEGRAM = "8150058407:AAFg44ySihFKBO1UW69QZqi07otqeB2IK5s"
+CHAT_ID = "1148025596"
 
-# --- ACTUALISATION TOUTES LES 3 MINUTES (180 000 ms) ---
-st_autorefresh(interval=180000, key="datarefresh")
+def send_telegram_msg(message):
+    try:
+        url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage?chat_id={CHAT_ID}&text={message}"
+        requests.get(url, timeout=10)
+    except:
+        pass
 
+# --- CONFIGURATION INTERFACE ---
+st.set_page_config(page_title="Sniper V15.7 - Telegram Direct", layout="wide")
+st_autorefresh(interval=180000, key="datarefresh") # 3 minutes pile
+
+# --- STRUCTURE DES ACTIFS ---
 ASSETS = {
     "FOREX": [
         "EURUSD=X", "GBPUSD=X", "USDJPY=X", "AUDUSD=X", "USDCAD=X", "USDCHF=X", "NZDUSD=X",
@@ -26,7 +36,7 @@ ASSETS = {
 }
 
 @st.cache_data(ttl=170)
-def run_final_sniper():
+def run_sniper_engine():
     results = []
     all_tickers = [ticker for category in ASSETS.values() for ticker in category]
     
@@ -74,6 +84,12 @@ def run_final_sniper():
                         else: note = "⏳ Attente Confirmation"
                     else: note = "Momentum insuffisant"
 
+                # Envoi Telegram si signal validé
+                if signal != "ATTENDRE":
+                    name = ticker.replace("=X","").replace("=F","").replace("^","")
+                    msg = f"🦅 SNIPER ALERT\n━━━━━━━━━━━━\nActif: {name}\nSignal: {signal}\nScore: {score}%\n━━━━━━━━━━━━\nPrix: {p_close:.5f}\nSL: {sl:.5f}\nTP: {tp:.5f}"
+                    send_telegram_msg(msg)
+
                 def f(x): return round(x, 5) if x < 2 else round(x, 2)
                 results.append({
                     "Catégorie": category, "Actif": ticker.replace("=X","").replace("=F","").replace("^",""),
@@ -84,27 +100,26 @@ def run_final_sniper():
     return results
 
 # --- RENDU ---
-st.title("🦅 Sniper V15.5 - Dashboard Temps Réel")
+st.title("🦅 Sniper V15.7 - Dashboard & Telegram")
 
-data = run_final_sniper()
+data = run_sniper_engine()
 if data:
     df = pd.DataFrame(data)
     
-    # --- MISE EN AVANT DES SIGNAUX (TOP PANEL) ---
+    # --- TOP PANEL (MISE EN AVANT) ---
     alerts = df[df['SIGNAL'].str.contains('ACHAT|VENTE')]
     if not alerts.empty:
         st.subheader("🔥 ALERTES DÉTECTÉES")
         st.dataframe(alerts.style.apply(lambda x: ['background-color: #1e8449; color: white' if 'ACHAT' in x.SIGNAL else 'background-color: #942d22; color: white' for i in x], axis=1))
         st.divider()
 
-    # --- TABLEAU COMPLET ---
-    st.subheader("📊 Surveillance Globale (Toutes les 3 min)")
-    def style_full(row):
-        color = '#1e8449' if 'ACHAT' in row.SIGNAL else ('#942d22' if 'VENTE' in row.SIGNAL else '')
-        return [f'background-color: {color}; color: white' if color else '' for _ in row]
+    # --- TABLEAU GLOBAL ---
+    st.subheader("📊 Surveillance Globale (3 min)")
+    def style_rows(row):
+        bg = '#1e8449' if 'ACHAT' in row.SIGNAL else ('#942d22' if 'VENTE' in row.SIGNAL else '')
+        return [f'background-color: {bg}; color: white' if bg else '' for _ in row]
     
-    st.table(df.style.apply(style_full, axis=1))
-    st.caption(f"Dernière analyse : {datetime.datetime.now().strftime('%H:%M:%S')}")
-
+    st.table(df.style.apply(style_rows, axis=1))
+    st.caption(f"Dernier scan : {datetime.datetime.now().strftime('%H:%M:%S')}")
 else:
-    st.error("Données Yahoo Finance indisponibles.")
+    st.error("Erreur de connexion aux données.")
