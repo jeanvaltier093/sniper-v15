@@ -19,23 +19,22 @@ def send_telegram_msg(message):
         pass
 
 # --- CONFIGURATION INTERFACE ---
-st.set_page_config(page_title="Sniper V15.8 - Confirmed Signals", layout="wide")
+st.set_page_config(page_title="Sniper V16.1 - Forex & Gold", layout="wide")
 st_autorefresh(interval=180000, key="datarefresh") # 3 minutes
 
-# Initialisation de la mémoire des signaux dans la session Streamlit
+# Initialisation de la mémoire
 if 'previous_signals' not in st.session_state:
     st.session_state['previous_signals'] = {}
 
+# --- ACTIFS (FILTRÉS : SANS INDICES) ---
 ASSETS = {
     "FOREX": [
         "EURUSD=X", "GBPUSD=X", "USDJPY=X", "AUDUSD=X", "USDCAD=X", "USDCHF=X", "NZDUSD=X",
         "EURGBP=X", "EURJPY=X", "GBPJPY=X", "EURAUD=X", "EURCAD=X", "EURCHF=X", "EURNZD=X",
         "GBPAUD=X", "GBPCAD=X", "GBPCHF=X", "GBPNZD=X", "AUDJPY=X", "AUDCAD=X", "AUDCHF=X", "AUDNZD=X",
-        "CADJPY=X", "CADCHF=X", "CHFJPY=X", "NZDJPY=X", "NZDCAD=X", "NZDCHF=X",
-        "USDSGD=X", "USDHKD=X", "USDTRY=X", "USDZAR=X", "USDMXN=X"
+        "CADJPY=X", "CADCHF=X", "CHFJPY=X", "NZDJPY=X", "NZDCAD=X", "NZDCHF=X"
     ],
-    "INDICES": ["^FCHI", "^GDAXI", "YM=F", "ES=F", "NQ=F", "^FTSE", "^N225"],
-    "COMMOS": ["GC=F", "SI=F", "CL=F", "HG=F"]
+    "MATIÈRES PREMIÈRES": ["GC=F", "SI=F", "CL=F", "HG=F"]
 }
 
 @st.cache_data(ttl=170)
@@ -60,16 +59,18 @@ def run_confirmed_engine():
                 atr_m = AverageTrueRange(df_m['High'], df_m['Low'], df_m['Close'], 14).average_true_range().iloc[-1]
                 ema_200_d = EMAIndicator(df_d['Close'], 200).ema_indicator().iloc[-1]
                 
+                # Détection de la Box (Consolidation)
                 box_h, box_l = float(df_m['High'].iloc[-21:-1].max()), float(df_m['Low'].iloc[-21:-1].min())
                 buffer = atr_m * 0.15
                 
+                # Indicateurs techniques
                 adx_d = ADXIndicator(df_d['High'], df_d['Low'], df_d['Close'], 14).adx().iloc[-1]
                 ad_m_obj = ADXIndicator(df_m['High'], df_m['Low'], df_m['Close'], 14)
                 ad_m, p_di, m_di = ad_m_obj.adx().iloc[-1], ad_m_obj.adx_pos().iloc[-1], ad_m_obj.adx_neg().iloc[-1]
                 
-                multiplier = 2.0 if category == "INDICES" else 1.6
                 score, signal, sl, tp, note = 0, "ATTENDRE", 0, 0, ""
 
+                # Filtrage : ADX Daily suffisant et Box pas trop large
                 if adx_d >= 18 and (box_h - box_l) <= (atr_m * 3.5):
                     trend_up = p_close > ema_200_d
                     if (trend_up and p_di > m_di) or (not trend_up and m_di > p_di): score += 40
@@ -78,10 +79,10 @@ def run_confirmed_engine():
 
                     if score >= 70:
                         if trend_up and p_close > (box_h + buffer):
-                            signal, sl = "ACHAT 🚀", p_close - (atr_m * multiplier)
+                            signal, sl = "ACHAT 🚀", p_close - (atr_m * 1.6)
                             tp = p_close + (p_close - sl) * 2.1
                         elif not trend_up and p_close < (box_l - buffer):
-                            signal, sl = "VENTE 🔻", p_close + (atr_m * multiplier)
+                            signal, sl = "VENTE 🔻", p_close + (atr_m * 1.6)
                             tp = p_close - (sl - p_close) * 2.1
                         else: note = "⏳ Zone de Buffer"
                     else: note = "Momentum faible"
@@ -89,14 +90,11 @@ def run_confirmed_engine():
                 name = ticker.replace("=X","").replace("=F","").replace("^","")
                 current_alerts[name] = signal
 
-                # LOGIQUE DE CONFIRMATION TELEGRAM
+                # LOGIQUE DE CONFIRMATION TELEGRAM (6min)
                 if signal != "ATTENDRE":
-                    # On vérifie si le signal était DÉJÀ là au scan précédent
                     prev_signal = st.session_state['previous_signals'].get(name, "ATTENDRE")
-                    
-                    if signal == prev_signal: # CONFIRMÉ (présent 2 fois de suite)
-                        # Pour ne pas spammer, on peut ajouter une condition ici
-                        msg = f"🦅 SIGNAL CONFIRMÉ (6min)\n━━━━━━━━━━━━\nActif: {name}\nSignal: {signal}\nScore: {score}%\n━━━━━━━━━━━━\nPrix: {p_close:.5f}\nSL: {sl:.5f}\nTP: {tp:.5f}"
+                    if signal == prev_signal:
+                        msg = f"🦅 SIGNAL CONFIRMÉ\n━━━━━━━━━━━━\nActif: {name}\nSignal: {signal}\nScore: {score}%\n━━━━━━━━━━━━\nPrix: {p_close:.5f}\nSL: {sl:.5f}\nTP: {tp:.5f}"
                         send_telegram_msg(msg)
 
                 def f(x): return round(x, 5) if x < 2 else round(x, 2)
@@ -107,20 +105,19 @@ def run_confirmed_engine():
                 })
             except: continue
     
-    # Mise à jour de la mémoire pour le prochain scan
     st.session_state['previous_signals'] = current_alerts
     return results
 
 # --- RENDU ---
-st.title("🦅 Sniper V15.8 - Haute Précision")
-st.info("Les alertes Telegram ne sont envoyées qu'après 6 minutes de confirmation pour filtrer les faux breakouts.")
+st.title("🦅 Sniper V16.1 - Forex & Commods")
+st.info("Alertes envoyées après 2 scans (6 min) de stabilité.")
 
 data = run_confirmed_engine()
 if data:
     df = pd.DataFrame(data)
     alerts = df[df['SIGNAL'].str.contains('ACHAT|VENTE')]
     if not alerts.empty:
-        st.subheader("🔥 ALERTES EN COURS (Validées ou en cours de confirmation)")
+        st.subheader("🔥 SIGNAUX EN COURS")
         st.dataframe(alerts.style.apply(lambda x: ['background-color: #1e8449; color: white' if 'ACHAT' in x.SIGNAL else 'background-color: #942d22; color: white' for i in x], axis=1))
         st.divider()
 
