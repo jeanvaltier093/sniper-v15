@@ -4,14 +4,15 @@ import yfinance as yf
 import requests
 from ta.trend import EMAIndicator, ADXIndicator
 from ta.volatility import AverageTrueRange
-import datetime
 from streamlit_autorefresh import st_autorefresh
+import datetime
+from zoneinfo import ZoneInfo
 
 # ─────────────────────────────────────────────
 # CONFIG TELEGRAM
 # ─────────────────────────────────────────────
-TOKEN_TELEGRAM = "8150058407:AAFg44ySihFKBO1UW69QZqi07otqeB2IK5s"
-CHAT_ID = "1148025596"
+TOKEN_TELEGRAM = "XXXXXXXXXXXX"
+CHAT_ID = "XXXXXXXXXXXX"
 
 def send_telegram_msg(message):
     try:
@@ -24,10 +25,44 @@ def send_telegram_msg(message):
         pass
 
 # ─────────────────────────────────────────────
-# CONFIG INTERFACE
+# FILTRE HORAIRE (PARIS)
 # ─────────────────────────────────────────────
-st.set_page_config(page_title="Sniper V16.3 — Swing Forex PRO", layout="wide")
-st_autorefresh(interval=180000, key="refresh")  # 3 minutes
+def is_trading_session():
+    now = datetime.datetime.now(ZoneInfo("Europe/Paris"))
+    hour = now.hour
+    return (8 <= hour < 12) or (14 <= hour < 17)
+
+# ─────────────────────────────────────────────
+# FILTRE NEWS HIGH IMPACT (ECONDB)
+# ─────────────────────────────────────────────
+def get_high_impact_news():
+    try:
+        r = requests.get("https://econdb.com/api/calendar", timeout=10)
+        data = r.json()
+        news = []
+        for e in data:
+            if e["impact"] == "High":
+                news.append({
+                    "time": datetime.datetime.fromisoformat(e["date"]).replace(tzinfo=datetime.timezone.utc),
+                    "currency": e["currency"]
+                })
+        return news
+    except:
+        return []
+
+def is_news_block(pair, news):
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    for e in news:
+        if e["currency"] in pair:
+            if abs((e["time"] - now_utc).total_seconds()) < 1800:
+                return True
+    return False
+
+# ─────────────────────────────────────────────
+# CONFIG APP
+# ─────────────────────────────────────────────
+st.set_page_config(page_title="Sniper V16.4 — Swing Forex PRO", layout="wide")
+st_autorefresh(interval=180000, key="refresh")
 
 if "previous_signals" not in st.session_state:
     st.session_state["previous_signals"] = {}
@@ -43,8 +78,7 @@ ASSETS = {
         "AUDJPY=X","AUDCAD=X","AUDCHF=X","AUDNZD=X",
         "CADJPY=X","CADCHF=X","CHFJPY=X",
         "NZDJPY=X","NZDCAD=X","NZDCHF=X"
-    ],
-    "MATIÈRES PREMIÈRES": ["GC=F","SI=F","CL=F","HG=F"]
+    ]
 }
 
 # ─────────────────────────────────────────────
@@ -52,23 +86,26 @@ ASSETS = {
 # ─────────────────────────────────────────────
 @st.cache_data(ttl=170)
 def run_engine():
+    if not is_trading_session():
+        return []
+
+    news_today = get_high_impact_news()
     results = []
     tickers = [t for cat in ASSETS.values() for t in cat]
 
-    try:
-        data_m15 = yf.download(tickers, period="5d", interval="15m", group_by="ticker", progress=False)
-        data_h1  = yf.download(tickers, period="21d", interval="1h", group_by="ticker", progress=False)
-        data_h4  = yf.download(tickers, period="60d", interval="4h", group_by="ticker", progress=False)
-        data_d1  = yf.download(tickers, period="200d", interval="1d", group_by="ticker", progress=False)
-    except:
-        return []
+    data_m15 = yf.download(tickers, period="5d", interval="15m", group_by="ticker", progress=False)
+    data_h1  = yf.download(tickers, period="21d", interval="1h", group_by="ticker", progress=False)
+    data_h4  = yf.download(tickers, period="60d", interval="4h", group_by="ticker", progress=False)
+    data_d1  = yf.download(tickers, period="200d", interval="1d", group_by="ticker", progress=False)
 
     new_signals = {}
 
     for category, symbols in ASSETS.items():
         for ticker in symbols:
             try:
-                if ticker not in data_m15.columns.levels[0]:
+                name = ticker.replace("=X","")
+
+                if is_news_block(name, news_today):
                     continue
 
                 df_m15 = data_m15[ticker].dropna()
@@ -76,107 +113,64 @@ def run_engine():
                 df_h4  = data_h4[ticker].dropna()
                 df_d1  = data_d1[ticker].dropna()
 
-                if len(df_h1) < 50 or len(df_h4) < 50 or len(df_d1) < 200:
-                    continue
-
-                # ───── PRIX & VOLATILITÉ ─────
                 close = float(df_m15["Close"].iloc[-1])
-                atr_m = AverageTrueRange(
-                    df_m15["High"], df_m15["Low"], df_m15["Close"], 14
-                ).average_true_range().iloc[-1]
+                atr = AverageTrueRange(df_m15["High"], df_m15["Low"], df_m15["Close"], 14).average_true_range().iloc[-1]
 
                 ema200_d = EMAIndicator(df_d1["Close"], 200).ema_indicator().iloc[-1]
                 ema50_h1 = EMAIndicator(df_h1["Close"], 50).ema_indicator().iloc[-1]
 
-                # ───── BOX 15M (CLÔTURE OBLIGATOIRE) ─────
                 box_high = df_m15["High"].iloc[-21:-1].max()
                 box_low  = df_m15["Low"].iloc[-21:-1].min()
-                buffer = atr_m * 0.15
+                buffer = atr * 0.15
 
-                breakout_up = close > (box_high + buffer)
-                breakout_dn = close < (box_low  - buffer)
+                breakout_up = close > box_high + buffer
+                breakout_dn = close < box_low - buffer
 
-                # ───── ADX MULTI-TF ─────
-                adx_d = ADXIndicator(
-                    df_d1["High"], df_d1["Low"], df_d1["Close"], 14
-                ).adx().iloc[-1]
-
-                adx_h4 = ADXIndicator(
-                    df_h4["High"], df_h4["Low"], df_h4["Close"], 14
-                ).adx().iloc[-1]
-
-                adx_m = ADXIndicator(
-                    df_m15["High"], df_m15["Low"], df_m15["Close"], 14
-                )
+                adx_d = ADXIndicator(df_d1["High"], df_d1["Low"], df_d1["Close"]).adx().iloc[-1]
+                adx_h4 = ADXIndicator(df_h4["High"], df_h4["Low"], df_h4["Close"]).adx().iloc[-1]
+                adx_m = ADXIndicator(df_m15["High"], df_m15["Low"], df_m15["Close"])
                 adx_val = adx_m.adx().iloc[-1]
                 p_di = adx_m.adx_pos().iloc[-1]
                 m_di = adx_m.adx_neg().iloc[-1]
 
-                # ───── FILTRE RANGE CRITIQUE ─────
                 if adx_d < 18 or adx_h4 < 20:
                     continue
 
-                # ───── CONFIRMATION H1 OBLIGATOIRE ─────
-                h1_bull_ok = close > ema50_h1
-                h1_bear_ok = close < ema50_h1
-
                 trend_up = close > ema200_d
+                h1_ok = close > ema50_h1 if trend_up else close < ema50_h1
 
                 score = 0
-                signal, sl, tp, note = "ATTENDRE", 0, 0, ""
+                if adx_val > 25: score += 45
+                elif adx_val > 20: score += 25
+                if abs(p_di - m_di) > 10: score += 35
+                score += 20 if h1_ok else 0
 
-                # ───── SCORE ASYMÉTRIQUE ─────
-                if adx_val > 25:
-                    score += 45
-                elif adx_val > 20:
-                    score += 25
+                signal, sl, tp = "ATTENDRE", "-", "-"
 
-                if trend_up and p_di > m_di and abs(p_di - m_di) > 10:
-                    score += 35
-                elif not trend_up and m_di > p_di and abs(m_di - p_di) > 10:
-                    score += 35
-
-                score += 20 if trend_up == (close > ema200_d) else 0
-
-                # ───── SIGNAL FINAL ─────
                 if score >= 70:
-                    if trend_up and breakout_up and h1_bull_ok:
+                    if trend_up and breakout_up and h1_ok:
                         signal = "ACHAT 🚀"
-                        sl = close - (atr_m * 1.6)
+                        sl = close - atr * 1.6
                         tp = close + (close - sl) * 2.1
-
-                    elif not trend_up and breakout_dn and h1_bear_ok:
+                    elif not trend_up and breakout_dn and h1_ok:
                         signal = "VENTE 🔻"
-                        sl = close + (atr_m * 1.6)
+                        sl = close + atr * 1.6
                         tp = close - (sl - close) * 2.1
-                    else:
-                        note = "⏳ Conflit structure H1"
 
-                name = ticker.replace("=X","").replace("=F","").replace("^","")
                 new_signals[name] = signal
 
-                # ───── TELEGRAM (CONFIRMATION 2 SCANS) ─────
-                if signal != "ATTENDRE":
-                    if st.session_state["previous_signals"].get(name) == signal:
-                        send_telegram_msg(
-                            f"🦅 SIGNAL CONFIRMÉ\n"
-                            f"━━━━━━━━━━━━\n"
-                            f"{name}\n{signal}\n"
-                            f"Prix : {close:.5f}\n"
-                            f"SL : {sl:.5f}\nTP : {tp:.5f}"
-                        )
-
-                def f(x): return round(x,5) if x < 2 else round(x,2)
+                if signal != "ATTENDRE" and st.session_state["previous_signals"].get(name) == signal:
+                    send_telegram_msg(
+                        f"🦅 SIGNAL CONFIRMÉ\n{name}\n{signal}\nPrix {close:.5f}\nSL {sl:.5f}\nTP {tp:.5f}"
+                    )
 
                 results.append({
-                    "Catégorie": category,
                     "Actif": name,
                     "Signal": signal,
                     "Score": f"{score}%",
-                    "Prix": f(close),
-                    "SL": f(sl) if sl else "-",
-                    "TP": f(tp) if tp else "-",
-                    "Note": note
+                    "Prix": round(close,5),
+                    "SL": round(sl,5) if sl != "-" else "-",
+                    "TP": round(tp,5) if tp != "-" else "-"
                 })
 
             except:
@@ -188,23 +182,13 @@ def run_engine():
 # ─────────────────────────────────────────────
 # AFFICHAGE
 # ─────────────────────────────────────────────
-st.title("🦅 Sniper V16.3 — Swing Forex PRO")
-st.info("Breakout 15m • Confirmation H1 • Filtre Range H4 • Direction Daily")
+st.title("🦅 Sniper V16.4 — Swing Forex PRO")
+st.info("Sessions Londres / NY • Filtre News • Breakout M15 • Confirmation H1")
 
 data = run_engine()
 
 if data:
     df = pd.DataFrame(data)
-    st.dataframe(
-        df.style.apply(
-            lambda x: [
-                "background-color:#1e8449;color:white" if "ACHAT" in x.Signal
-                else "background-color:#942d22;color:white" if "VENTE" in x.Signal
-                else ""
-                for _ in x
-            ],
-            axis=1
-        )
-    )
+    st.dataframe(df)
 else:
-    st.warning("Aucun setup valide dans les conditions actuelles.")
+    st.warning("⏸ Aucun signal (hors horaires ou news actives)")
