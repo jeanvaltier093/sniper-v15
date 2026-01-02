@@ -4,27 +4,37 @@ import yfinance as yf
 import requests
 from ta.trend import EMAIndicator, ADXIndicator
 from ta.volatility import AverageTrueRange
+import datetime
 from streamlit_autorefresh import st_autorefresh
 
-# --- CONFIGURATION TELEGRAM ---
+# ─────────────────────────────────────────────
+# CONFIG TELEGRAM
+# ─────────────────────────────────────────────
 TOKEN_TELEGRAM = "8150058407:AAFg44ySihFKBO1UW69QZqi07otqeB2IK5s"
 CHAT_ID = "1148025596"
 
 def send_telegram_msg(message):
     try:
-        url = f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage?chat_id={CHAT_ID}&text={message}"
-        requests.get(url, timeout=10)
+        requests.get(
+            f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage",
+            params={"chat_id": CHAT_ID, "text": message},
+            timeout=10
+        )
     except:
         pass
 
-# --- CONFIG INTERFACE ---
-st.set_page_config(page_title="Sniper V16.2 - PRO", layout="wide")
-st_autorefresh(interval=180000, key="datarefresh")
+# ─────────────────────────────────────────────
+# CONFIG INTERFACE
+# ─────────────────────────────────────────────
+st.set_page_config(page_title="Sniper V16.3 — Swing Forex PRO", layout="wide")
+st_autorefresh(interval=180000, key="refresh")  # 3 minutes
 
-if 'previous_signals' not in st.session_state:
-    st.session_state['previous_signals'] = {}
+if "previous_signals" not in st.session_state:
+    st.session_state["previous_signals"] = {}
 
-# --- ACTIFS ---
+# ─────────────────────────────────────────────
+# ACTIFS
+# ─────────────────────────────────────────────
 ASSETS = {
     "FOREX": [
         "EURUSD=X","GBPUSD=X","USDJPY=X","AUDUSD=X","USDCAD=X","USDCHF=X","NZDUSD=X",
@@ -37,136 +47,164 @@ ASSETS = {
     "MATIÈRES PREMIÈRES": ["GC=F","SI=F","CL=F","HG=F"]
 }
 
+# ─────────────────────────────────────────────
+# MOTEUR PRINCIPAL
+# ─────────────────────────────────────────────
 @st.cache_data(ttl=170)
-def run_confirmed_engine():
+def run_engine():
     results = []
-    all_tickers = [t for cat in ASSETS.values() for t in cat]
+    tickers = [t for cat in ASSETS.values() for t in cat]
 
     try:
-        data_m = yf.download(all_tickers, period="5d", interval="15m", group_by='ticker', progress=False)
-        data_d = yf.download(all_tickers, period="150d", interval="1d", group_by='ticker', progress=False)
-        data_h4 = yf.download(all_tickers, period="60d", interval="4h", group_by='ticker', progress=False)
+        data_m15 = yf.download(tickers, period="5d", interval="15m", group_by="ticker", progress=False)
+        data_h1  = yf.download(tickers, period="21d", interval="1h", group_by="ticker", progress=False)
+        data_h4  = yf.download(tickers, period="60d", interval="4h", group_by="ticker", progress=False)
+        data_d1  = yf.download(tickers, period="200d", interval="1d", group_by="ticker", progress=False)
     except:
         return []
 
-    current_alerts = {}
+    new_signals = {}
 
-    for category, tickers in ASSETS.items():
-        for ticker in tickers:
-            signal, sl, tp, note, score = "ATTENDRE", 0, 0, "", 0
-
+    for category, symbols in ASSETS.items():
+        for ticker in symbols:
             try:
-                if ticker not in data_m.columns.levels[0]:
-                    note = "Données indisponibles"
-                    raise Exception
+                if ticker not in data_m15.columns.levels[0]:
+                    continue
 
-                df_m = data_m[ticker].dropna()
-                df_d = data_d[ticker].dropna()
-                df_h4 = data_h4[ticker].dropna()
+                df_m15 = data_m15[ticker].dropna()
+                df_h1  = data_h1[ticker].dropna()
+                df_h4  = data_h4[ticker].dropna()
+                df_d1  = data_d1[ticker].dropna()
 
-                h4_valid = len(df_h4) >= 30
+                if len(df_h1) < 50 or len(df_h4) < 50 or len(df_d1) < 200:
+                    continue
 
-                p_close = float(df_m['Close'].iloc[-1])
-                atr_m = AverageTrueRange(df_m['High'], df_m['Low'], df_m['Close'], 14).average_true_range().iloc[-1]
-                ema_200_d = EMAIndicator(df_d['Close'], 200).ema_indicator().iloc[-1]
+                # ───── PRIX & VOLATILITÉ ─────
+                close = float(df_m15["Close"].iloc[-1])
+                atr_m = AverageTrueRange(
+                    df_m15["High"], df_m15["Low"], df_m15["Close"], 14
+                ).average_true_range().iloc[-1]
 
-                # BOX 15M
-                box_h = df_m['High'].iloc[-21:-1].max()
-                box_l = df_m['Low'].iloc[-21:-1].min()
+                ema200_d = EMAIndicator(df_d1["Close"], 200).ema_indicator().iloc[-1]
+                ema50_h1 = EMAIndicator(df_h1["Close"], 50).ema_indicator().iloc[-1]
+
+                # ───── BOX 15M (CLÔTURE OBLIGATOIRE) ─────
+                box_high = df_m15["High"].iloc[-21:-1].max()
+                box_low  = df_m15["Low"].iloc[-21:-1].min()
                 buffer = atr_m * 0.15
 
-                # STRUCTURE H4
-                if h4_valid:
-                    h4_high = df_h4['High'].iloc[-20:].max()
-                    h4_low  = df_h4['Low'].iloc[-20:].min()
-                    h4_trend_up = p_close > (h4_high + atr_m * 0.2)
-                    h4_trend_down = p_close < (h4_low - atr_m * 0.2)
-                else:
-                    h4_trend_up = h4_trend_down = False
+                breakout_up = close > (box_high + buffer)
+                breakout_dn = close < (box_low  - buffer)
 
-                # ADX
-                adx_d = ADXIndicator(df_d['High'], df_d['Low'], df_d['Close'], 14).adx().iloc[-1]
-                ad_m_obj = ADXIndicator(df_m['High'], df_m['Low'], df_m['Close'], 14)
-                ad_m = ad_m_obj.adx().iloc[-1]
-                p_di = ad_m_obj.adx_pos().iloc[-1]
-                m_di = ad_m_obj.adx_neg().iloc[-1]
+                # ───── ADX MULTI-TF ─────
+                adx_d = ADXIndicator(
+                    df_d1["High"], df_d1["Low"], df_d1["Close"], 14
+                ).adx().iloc[-1]
 
-                if adx_d >= 18 and (box_h - box_l) <= (atr_m * 3.5):
-                    trend_up = p_close > ema_200_d
+                adx_h4 = ADXIndicator(
+                    df_h4["High"], df_h4["Low"], df_h4["Close"], 14
+                ).adx().iloc[-1]
 
-                    # SCORE ASYMÉTRIQUE PRO
-                    if ad_m > 25:
-                        score += 45
-                    elif ad_m > 20:
-                        score += 25
+                adx_m = ADXIndicator(
+                    df_m15["High"], df_m15["Low"], df_m15["Close"], 14
+                )
+                adx_val = adx_m.adx().iloc[-1]
+                p_di = adx_m.adx_pos().iloc[-1]
+                m_di = adx_m.adx_neg().iloc[-1]
 
-                    if trend_up and p_di > m_di and abs(p_di - m_di) > 10:
-                        score += 35
-                    elif not trend_up and m_di > p_di and abs(m_di - p_di) > 10:
-                        score += 35
+                # ───── FILTRE RANGE CRITIQUE ─────
+                if adx_d < 18 or adx_h4 < 20:
+                    continue
 
-                    if trend_up and p_close > ema_200_d:
-                        score += 20
-                    elif not trend_up and p_close < ema_200_d:
-                        score += 20
+                # ───── CONFIRMATION H1 OBLIGATOIRE ─────
+                h1_bull_ok = close > ema50_h1
+                h1_bear_ok = close < ema50_h1
 
-                    if score >= 70:
-                        if trend_up and h4_trend_up and p_close > (box_h + buffer):
-                            signal = "ACHAT 🚀"
-                            sl = p_close - (atr_m * 1.6)
-                            tp = p_close + (p_close - sl) * 2.1
-                        elif not trend_up and h4_trend_down and p_close < (box_l - buffer):
-                            signal = "VENTE 🔻"
-                            sl = p_close + (atr_m * 1.6)
-                            tp = p_close - (sl - p_close) * 2.1
-                        else:
-                            note = "⏳ Structure H4 non validée"
+                trend_up = close > ema200_d
+
+                score = 0
+                signal, sl, tp, note = "ATTENDRE", 0, 0, ""
+
+                # ───── SCORE ASYMÉTRIQUE ─────
+                if adx_val > 25:
+                    score += 45
+                elif adx_val > 20:
+                    score += 25
+
+                if trend_up and p_di > m_di and abs(p_di - m_di) > 10:
+                    score += 35
+                elif not trend_up and m_di > p_di and abs(m_di - p_di) > 10:
+                    score += 35
+
+                score += 20 if trend_up == (close > ema200_d) else 0
+
+                # ───── SIGNAL FINAL ─────
+                if score >= 70:
+                    if trend_up and breakout_up and h1_bull_ok:
+                        signal = "ACHAT 🚀"
+                        sl = close - (atr_m * 1.6)
+                        tp = close + (close - sl) * 2.1
+
+                    elif not trend_up and breakout_dn and h1_bear_ok:
+                        signal = "VENTE 🔻"
+                        sl = close + (atr_m * 1.6)
+                        tp = close - (sl - close) * 2.1
                     else:
-                        note = "Momentum insuffisant"
-                else:
-                    note = "Marché en range ou volatilité excessive"
+                        note = "⏳ Conflit structure H1"
+
+                name = ticker.replace("=X","").replace("=F","").replace("^","")
+                new_signals[name] = signal
+
+                # ───── TELEGRAM (CONFIRMATION 2 SCANS) ─────
+                if signal != "ATTENDRE":
+                    if st.session_state["previous_signals"].get(name) == signal:
+                        send_telegram_msg(
+                            f"🦅 SIGNAL CONFIRMÉ\n"
+                            f"━━━━━━━━━━━━\n"
+                            f"{name}\n{signal}\n"
+                            f"Prix : {close:.5f}\n"
+                            f"SL : {sl:.5f}\nTP : {tp:.5f}"
+                        )
+
+                def f(x): return round(x,5) if x < 2 else round(x,2)
+
+                results.append({
+                    "Catégorie": category,
+                    "Actif": name,
+                    "Signal": signal,
+                    "Score": f"{score}%",
+                    "Prix": f(close),
+                    "SL": f(sl) if sl else "-",
+                    "TP": f(tp) if tp else "-",
+                    "Note": note
+                })
 
             except:
-                pass
+                continue
 
-            name = ticker.replace("=X","").replace("=F","").replace("^","")
-            current_alerts[name] = signal
-
-            if signal != "ATTENDRE":
-                if st.session_state['previous_signals'].get(name) == signal:
-                    send_telegram_msg(
-                        f"🦅 SIGNAL CONFIRMÉ\nActif: {name}\nSignal: {signal}\nScore: {score}%\nSL: {sl:.5f}\nTP: {tp:.5f}"
-                    )
-
-            def f(x): return round(x,5) if x < 2 else round(x,2)
-
-            results.append({
-                "Catégorie": category,
-                "Actif": name,
-                "SIGNAL": signal,
-                "Score": f"{score}%",
-                "Prix": f(p_close) if 'p_close' in locals() else "-",
-                "Stop Loss": f(sl) if sl else "-",
-                "Take Profit": f(tp) if tp else "-",
-                "Note": note if note else "Attente setup"
-            })
-
-    st.session_state['previous_signals'] = current_alerts
+    st.session_state["previous_signals"] = new_signals
     return results
 
-# --- INTERFACE ---
-st.title("🦅 Sniper V16.2 — Forex Swing Pro")
-st.info("Toutes les paires sont visibles — signaux filtrés PRO")
+# ─────────────────────────────────────────────
+# AFFICHAGE
+# ─────────────────────────────────────────────
+st.title("🦅 Sniper V16.3 — Swing Forex PRO")
+st.info("Breakout 15m • Confirmation H1 • Filtre Range H4 • Direction Daily")
 
-data = run_confirmed_engine()
+data = run_engine()
 
 if data:
     df = pd.DataFrame(data)
-    st.dataframe(df.style.apply(
-        lambda x: ['background-color:#1e8449;color:white' if 'ACHAT' in x.SIGNAL
-                   else 'background-color:#942d22;color:white' if 'VENTE' in x.SIGNAL else ''
-                   for _ in x],
-        axis=1
-    ))
+    st.dataframe(
+        df.style.apply(
+            lambda x: [
+                "background-color:#1e8449;color:white" if "ACHAT" in x.Signal
+                else "background-color:#942d22;color:white" if "VENTE" in x.Signal
+                else ""
+                for _ in x
+            ],
+            axis=1
+        )
+    )
 else:
-    st.error("Aucune donnée exploitable.")
+    st.warning("Aucun setup valide dans les conditions actuelles.")
