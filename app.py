@@ -4,7 +4,6 @@ import yfinance as yf
 import requests
 from ta.trend import EMAIndicator, ADXIndicator
 from ta.volatility import AverageTrueRange
-import datetime
 from streamlit_autorefresh import st_autorefresh
 
 # --- CONFIGURATION TELEGRAM ---
@@ -54,70 +53,63 @@ def run_confirmed_engine():
 
     for category, tickers in ASSETS.items():
         for ticker in tickers:
+            signal, sl, tp, note, score = "ATTENDRE", 0, 0, "", 0
+
             try:
                 if ticker not in data_m.columns.levels[0]:
-                    continue
+                    note = "Données indisponibles"
+                    raise Exception
 
                 df_m = data_m[ticker].dropna()
                 df_d = data_d[ticker].dropna()
                 df_h4 = data_h4[ticker].dropna()
 
-                if len(df_h4) < 30:
-                    continue
+                h4_valid = len(df_h4) >= 30
 
-                # --- PRIX & INDICATEURS ---
                 p_close = float(df_m['Close'].iloc[-1])
-                atr_m = AverageTrueRange(df_m['High'], df_m['Low'], df_m['Close'], 14)\
-                    .average_true_range().iloc[-1]
+                atr_m = AverageTrueRange(df_m['High'], df_m['Low'], df_m['Close'], 14).average_true_range().iloc[-1]
                 ema_200_d = EMAIndicator(df_d['Close'], 200).ema_indicator().iloc[-1]
 
-                # --- BOX 15M ---
+                # BOX 15M
                 box_h = df_m['High'].iloc[-21:-1].max()
                 box_l = df_m['Low'].iloc[-21:-1].min()
                 buffer = atr_m * 0.15
 
-                # --- STRUCTURE H4 (AJOUT PRO) ---
-                h4_high = df_h4['High'].iloc[-20:].max()
-                h4_low  = df_h4['Low'].iloc[-20:].min()
+                # STRUCTURE H4
+                if h4_valid:
+                    h4_high = df_h4['High'].iloc[-20:].max()
+                    h4_low  = df_h4['Low'].iloc[-20:].min()
+                    h4_trend_up = p_close > (h4_high + atr_m * 0.2)
+                    h4_trend_down = p_close < (h4_low - atr_m * 0.2)
+                else:
+                    h4_trend_up = h4_trend_down = False
 
-                h4_trend_up = p_close > (h4_high + atr_m * 0.2)
-                h4_trend_down = p_close < (h4_low - atr_m * 0.2)
-
-                # --- ADX ---
-                adx_d = ADXIndicator(df_d['High'], df_d['Low'], df_d['Close'], 14)\
-                    .adx().iloc[-1]
-
+                # ADX
+                adx_d = ADXIndicator(df_d['High'], df_d['Low'], df_d['Close'], 14).adx().iloc[-1]
                 ad_m_obj = ADXIndicator(df_m['High'], df_m['Low'], df_m['Close'], 14)
                 ad_m = ad_m_obj.adx().iloc[-1]
                 p_di = ad_m_obj.adx_pos().iloc[-1]
                 m_di = ad_m_obj.adx_neg().iloc[-1]
 
-                score, signal, sl, tp, note = 0, "ATTENDRE", 0, 0, ""
-
-                # --- FILTRES GLOBAUX ---
                 if adx_d >= 18 and (box_h - box_l) <= (atr_m * 3.5):
                     trend_up = p_close > ema_200_d
 
-                    # --- SCORE ASYMÉTRIQUE PRO ---
-                    # 1️⃣ Momentum
+                    # SCORE ASYMÉTRIQUE PRO
                     if ad_m > 25:
                         score += 45
                     elif ad_m > 20:
                         score += 25
 
-                    # 2️⃣ Direction claire
                     if trend_up and p_di > m_di and abs(p_di - m_di) > 10:
                         score += 35
                     elif not trend_up and m_di > p_di and abs(m_di - p_di) > 10:
                         score += 35
 
-                    # 3️⃣ Structure EMA Daily
                     if trend_up and p_close > ema_200_d:
                         score += 20
                     elif not trend_up and p_close < ema_200_d:
                         score += 20
 
-                    # --- DÉCLENCHEMENT ---
                     if score >= 70:
                         if trend_up and h4_trend_up and p_close > (box_h + buffer):
                             signal = "ACHAT 🚀"
@@ -128,49 +120,43 @@ def run_confirmed_engine():
                             sl = p_close + (atr_m * 1.6)
                             tp = p_close - (sl - p_close) * 2.1
                         else:
-                            note = "⏳ Structure HTF non validée"
+                            note = "⏳ Structure H4 non validée"
                     else:
                         note = "Momentum insuffisant"
+                else:
+                    note = "Marché en range ou volatilité excessive"
 
-                name = ticker.replace("=X","").replace("=F","").replace("^","")
-                current_alerts[name] = signal
-
-                # --- CONFIRMATION TELEGRAM ---
-                if signal != "ATTENDRE":
-                    prev_signal = st.session_state['previous_signals'].get(name, "ATTENDRE")
-                    if signal == prev_signal:
-                        send_telegram_msg(
-                            f"🦅 SIGNAL CONFIRMÉ\n"
-                            f"━━━━━━━━━━━━\n"
-                            f"Actif: {name}\n"
-                            f"Signal: {signal}\n"
-                            f"Score: {score}%\n"
-                            f"Prix: {p_close:.5f}\n"
-                            f"SL: {sl:.5f}\n"
-                            f"TP: {tp:.5f}"
-                        )
-
-                def f(x): return round(x,5) if x < 2 else round(x,2)
-
-                results.append({
-                    "Catégorie": category,
-                    "Actif": name,
-                    "SIGNAL": signal,
-                    "Score": f"{score}%",
-                    "Prix": f(p_close),
-                    "Stop Loss": f(sl) if sl else "-",
-                    "Take Profit": f(tp) if tp else "-",
-                    "Note": note
-                })
             except:
-                continue
+                pass
+
+            name = ticker.replace("=X","").replace("=F","").replace("^","")
+            current_alerts[name] = signal
+
+            if signal != "ATTENDRE":
+                if st.session_state['previous_signals'].get(name) == signal:
+                    send_telegram_msg(
+                        f"🦅 SIGNAL CONFIRMÉ\nActif: {name}\nSignal: {signal}\nScore: {score}%\nSL: {sl:.5f}\nTP: {tp:.5f}"
+                    )
+
+            def f(x): return round(x,5) if x < 2 else round(x,2)
+
+            results.append({
+                "Catégorie": category,
+                "Actif": name,
+                "SIGNAL": signal,
+                "Score": f"{score}%",
+                "Prix": f(p_close) if 'p_close' in locals() else "-",
+                "Stop Loss": f(sl) if sl else "-",
+                "Take Profit": f(tp) if tp else "-",
+                "Note": note if note else "Attente setup"
+            })
 
     st.session_state['previous_signals'] = current_alerts
     return results
 
 # --- INTERFACE ---
 st.title("🦅 Sniper V16.2 — Forex Swing Pro")
-st.info("Breakouts validés par structure H4 + momentum réel")
+st.info("Toutes les paires sont visibles — signaux filtrés PRO")
 
 data = run_confirmed_engine()
 
