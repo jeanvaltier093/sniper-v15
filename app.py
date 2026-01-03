@@ -9,10 +9,10 @@ import datetime
 from zoneinfo import ZoneInfo
 
 # ─────────────────────────────────────────────
-# CONFIG TELEGRAM
+# CONFIG TELEGRAM AVEC SECRETS STREAMLIT
 # ─────────────────────────────────────────────
-TOKEN_TELEGRAM = "XXXXXXXXXXXX"
-CHAT_ID = "XXXXXXXXXXXX"
+TOKEN_TELEGRAM = st.secrets["TELEGRAM_TOKEN"]
+CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
 
 def send_telegram_msg(message):
     try:
@@ -57,6 +57,12 @@ def is_news_block(pair, news):
             if abs((e["time"] - now_utc).total_seconds()) < 1800:
                 return True
     return False
+
+# ─────────────────────────────────────────────
+# PIP FACTOR (FOREX EXACT)
+# ─────────────────────────────────────────────
+def pip_factor(pair):
+    return 100 if "JPY" in pair else 10000
 
 # ─────────────────────────────────────────────
 # CONFIG APP
@@ -145,7 +151,7 @@ def run_engine():
                 if abs(p_di - m_di) > 10: score += 35
                 score += 20 if h1_ok else 0
 
-                signal, sl, tp = "ATTENDRE", "-", "-"
+                signal, sl, tp = "ATTENDRE", None, None
 
                 if score >= 70:
                     if trend_up and breakout_up and h1_ok:
@@ -157,8 +163,11 @@ def run_engine():
                         sl = close + atr * 1.6
                         tp = close - (sl - close) * 2.1
 
-                new_signals[name] = signal
+                factor = pip_factor(name)
+                sl_pips = abs(close - sl) * factor if sl else "-"
+                tp_pips = abs(tp - close) * factor if tp else "-"
 
+                # Envoi Telegram si signal confirmé
                 if signal != "ATTENDRE" and st.session_state["previous_signals"].get(name) == signal:
                     send_telegram_msg(
                         f"🦅 SIGNAL CONFIRMÉ\n{name}\n{signal}\nPrix {close:.5f}\nSL {sl:.5f}\nTP {tp:.5f}"
@@ -169,9 +178,13 @@ def run_engine():
                     "Signal": signal,
                     "Score": f"{score}%",
                     "Prix": round(close,5),
-                    "SL": round(sl,5) if sl != "-" else "-",
-                    "TP": round(tp,5) if tp != "-" else "-"
+                    "SL Prix": round(sl,5) if sl else "-",
+                    "SL Pips": round(sl_pips,1) if sl else "-",
+                    "TP Prix": round(tp,5) if tp else "-",
+                    "TP Pips": round(tp_pips,1) if tp else "-"
                 })
+
+                new_signals[name] = signal
 
             except:
                 continue
@@ -183,12 +196,12 @@ def run_engine():
 # AFFICHAGE
 # ─────────────────────────────────────────────
 st.title("🦅 Sniper V16.4 — Swing Forex PRO")
-st.info("Sessions Londres / NY • Filtre News • Breakout M15 • Confirmation H1")
+st.info("Sessions Londres / NY • Filtre News • Breakout M15 • Confirmation H1 • SL/TP Prix & Pips • Score")
 
 data = run_engine()
 
 if data:
     df = pd.DataFrame(data)
-    st.dataframe(df)
+    st.dataframe(df, use_container_width=True)
 else:
     st.warning("⏸ Aucun signal (hors horaires ou news actives)")
