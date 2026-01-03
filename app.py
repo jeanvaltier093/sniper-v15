@@ -25,14 +25,6 @@ def send_telegram_msg(message):
         pass
 
 # ─────────────────────────────────────────────
-# TEST CONTRÔLÉ TELEGRAM
-# ─────────────────────────────────────────────
-st.sidebar.header("🔧 Tests système")
-if st.sidebar.button("📨 Tester Telegram"):
-    send_telegram_msg("✅ TEST TELEGRAM OK — Sniper V16.4 est connecté")
-    st.sidebar.success("Message Telegram envoyé")
-
-# ─────────────────────────────────────────────
 # FILTRE HORAIRE (PARIS)
 # ─────────────────────────────────────────────
 def is_trading_session():
@@ -71,22 +63,6 @@ def is_news_block(pair, news):
 # ─────────────────────────────────────────────
 def pip_factor(pair):
     return 100 if "JPY" in pair else 10000
-
-# ─────────────────────────────────────────────
-# IG POINTS / DISTANCE MINIMUM + SPREAD
-# ─────────────────────────────────────────────
-MIN_IG_POINTS = 20  # Forex standard, ajustable par pair
-SPREAD_BUFFER_PIPS = 1.2  # Ajouter buffer pour spread
-
-def ig_points(pair, pips):
-    # Conversion pips → points IG
-    points = pips if "JPY" in pair else pips * 10
-    # Appliquer minimum IG
-    if points < MIN_IG_POINTS:
-        points = MIN_IG_POINTS
-    # Ajouter spread buffer
-    points += SPREAD_BUFFER_PIPS
-    return round(points, 1)
 
 # ─────────────────────────────────────────────
 # CONFIG APP
@@ -201,12 +177,6 @@ def run_engine():
                 sl_pips = abs(close - sl) * factor if sl else "-"
                 tp_pips = abs(tp - close) * factor if tp else "-"
 
-                # ─────────────────────────────────────────────
-                # AJOUT DISTANCE IG
-                # ─────────────────────────────────────────────
-                sl_points = ig_points(name, sl_pips) if sl else "-"
-                tp_points = ig_points(name, tp_pips) if tp else "-"
-
                 results.append({
                     "Actif": name,
                     "Signal": signal,
@@ -214,10 +184,8 @@ def run_engine():
                     "Prix": round(close, 5),
                     "SL Prix": round(sl, 5) if sl else "-",
                     "SL Pips": round(sl_pips, 1) if sl else "-",
-                    "SL Distance IG": sl_points,
                     "TP Prix": round(tp, 5) if tp else "-",
-                    "TP Pips": round(tp_pips, 1) if tp else "-",
-                    "TP Distance IG": tp_points
+                    "TP Pips": round(tp_pips, 1) if tp else "-"
                 })
 
                 new_signals[name] = signal
@@ -232,7 +200,7 @@ def run_engine():
 # AFFICHAGE
 # ─────────────────────────────────────────────
 st.title("🦅 Sniper V16.4 — Swing Forex PRO")
-st.info("Sessions Londres / NY • Filtre News • Breakout M15 • Confirmation H1 • SL/TP Prix & Pips • Distance IG")
+st.info("Sessions Londres / NY • Filtre News • Breakout M15 • Confirmation H1 • SL/TP Prix & Pips")
 
 data = run_engine()
 
