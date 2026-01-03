@@ -9,7 +9,7 @@ import datetime
 from zoneinfo import ZoneInfo
 
 # ─────────────────────────────────────────────
-# CONFIG TELEGRAM (STREAMLIT SECRETS)
+# CONFIG TELEGRAM AVEC SECRETS STREAMLIT
 # ─────────────────────────────────────────────
 TOKEN_TELEGRAM = st.secrets["TELEGRAM_TOKEN"]
 CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
@@ -120,11 +120,7 @@ def run_engine():
                 df_d1  = data_d1[ticker].dropna()
 
                 close = float(df_m15["Close"].iloc[-1])
-                atr = AverageTrueRange(
-                    df_m15["High"],
-                    df_m15["Low"],
-                    df_m15["Close"], 14
-                ).average_true_range().iloc[-1]
+                atr = AverageTrueRange(df_m15["High"], df_m15["Low"], df_m15["Close"], 14).average_true_range().iloc[-1]
 
                 ema200_d = EMAIndicator(df_d1["Close"], 200).ema_indicator().iloc[-1]
                 ema50_h1 = EMAIndicator(df_h1["Close"], 50).ema_indicator().iloc[-1]
@@ -138,7 +134,6 @@ def run_engine():
 
                 adx_d = ADXIndicator(df_d1["High"], df_d1["Low"], df_d1["Close"]).adx().iloc[-1]
                 adx_h4 = ADXIndicator(df_h4["High"], df_h4["Low"], df_h4["Close"]).adx().iloc[-1]
-
                 adx_m = ADXIndicator(df_m15["High"], df_m15["Low"], df_m15["Close"])
                 adx_val = adx_m.adx().iloc[-1]
                 p_di = adx_m.adx_pos().iloc[-1]
@@ -151,14 +146,9 @@ def run_engine():
                 h1_ok = close > ema50_h1 if trend_up else close < ema50_h1
 
                 score = 0
-                if adx_val > 25:
-                    score += 45
-                elif adx_val > 20:
-                    score += 25
-
-                if abs(p_di - m_di) > 10:
-                    score += 35
-
+                if adx_val > 25: score += 45
+                elif adx_val > 20: score += 25
+                if abs(p_di - m_di) > 10: score += 35
                 score += 20 if h1_ok else 0
 
                 signal, sl, tp = "ATTENDRE", None, None
@@ -183,9 +173,9 @@ def run_engine():
                     "Score": f"{score}%",
                     "Prix": round(close, 5),
                     "SL Prix": round(sl, 5) if sl else "-",
-                    "SL Pips": round(sl_pips, 1) if sl else "-",
+                    "SL Pips": round(sl_pips, 1) if sl != None else "-",
                     "TP Prix": round(tp, 5) if tp else "-",
-                    "TP Pips": round(tp_pips, 1) if tp else "-"
+                    "TP Pips": round(tp_pips, 1) if tp != None else "-"
                 })
 
                 new_signals[name] = signal
