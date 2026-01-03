@@ -9,16 +9,18 @@ import datetime
 from zoneinfo import ZoneInfo
 
 # ─────────────────────────────────────────────
-# CONFIG TELEGRAM AVEC SECRETS STREAMLIT
+# CONFIG TELEGRAM (SECRET VIA STREAMLIT)
 # ─────────────────────────────────────────────
-TOKEN_TELEGRAM = st.secrets["TELEGRAM_TOKEN"]
-CHAT_ID = st.secrets["TELEGRAM_CHAT_ID"]
+if "TOKEN_TELEGRAM" not in st.session_state:
+    st.session_state["TOKEN_TELEGRAM"] = "8150058407:AAFg44ySihFKBO1UW69QZqi07otqeB2IK5s"
+if "CHAT_ID" not in st.session_state:
+    st.session_state["CHAT_ID"] = "1148025596"
 
 def send_telegram_msg(message):
     try:
         requests.get(
-            f"https://api.telegram.org/bot{TOKEN_TELEGRAM}/sendMessage",
-            params={"chat_id": CHAT_ID, "text": message},
+            f"https://api.telegram.org/bot{st.session_state['TOKEN_TELEGRAM']}/sendMessage",
+            params={"chat_id": st.session_state["CHAT_ID"], "text": message},
             timeout=10
         )
     except:
@@ -92,27 +94,30 @@ ASSETS = {
 # ─────────────────────────────────────────────
 @st.cache_data(ttl=170)
 def run_engine():
-    if not is_trading_session():
-        return []
-
-    news_today = get_high_impact_news()
     results = []
+    news_today = get_high_impact_news()
     tickers = [t for cat in ASSETS.values() for t in cat]
+    new_signals = {}
 
+    # ───── TELEGRAM + PANDAS DOWNLOAD ─────
     data_m15 = yf.download(tickers, period="5d", interval="15m", group_by="ticker", progress=False)
     data_h1  = yf.download(tickers, period="21d", interval="1h", group_by="ticker", progress=False)
     data_h4  = yf.download(tickers, period="60d", interval="4h", group_by="ticker", progress=False)
     data_d1  = yf.download(tickers, period="200d", interval="1d", group_by="ticker", progress=False)
 
-    new_signals = {}
-
     for category, symbols in ASSETS.items():
         for ticker in symbols:
             try:
                 name = ticker.replace("=X","")
+                comment = "-"
 
+                # ───── Vérification news ─────
                 if is_news_block(name, news_today):
-                    continue
+                    comment = "News high impact"
+                
+                # ───── Vérification session ─────
+                if not is_trading_session():
+                    comment = "Hors session" if comment == "-" else comment + " + Hors session"
 
                 df_m15 = data_m15[ticker].dropna()
                 df_h1  = data_h1[ticker].dropna()
@@ -139,11 +144,15 @@ def run_engine():
                 p_di = adx_m.adx_pos().iloc[-1]
                 m_di = adx_m.adx_neg().iloc[-1]
 
+                # ───── Filtre ADX ─────
                 if adx_d < 18 or adx_h4 < 20:
-                    continue
+                    comment = "ADX Daily/H4 trop bas" if comment == "-" else comment + " + ADX Daily/H4 trop bas"
 
                 trend_up = close > ema200_d
                 h1_ok = close > ema50_h1 if trend_up else close < ema50_h1
+
+                if not h1_ok:
+                    comment = "Conflit structure H1" if comment == "-" else comment + " + Conflit structure H1"
 
                 score = 0
                 if adx_val > 25: score += 45
@@ -153,7 +162,7 @@ def run_engine():
 
                 signal, sl, tp = "ATTENDRE", None, None
 
-                if score >= 70:
+                if score >= 70 and comment == "-":
                     if trend_up and breakout_up and h1_ok:
                         signal = "ACHAT 🚀"
                         sl = close - atr * 1.6
@@ -163,15 +172,10 @@ def run_engine():
                         sl = close + atr * 1.6
                         tp = close - (sl - close) * 2.1
 
+                # ───── Pips exact ─────
                 factor = pip_factor(name)
                 sl_pips = abs(close - sl) * factor if sl else "-"
                 tp_pips = abs(tp - close) * factor if tp else "-"
-
-                # Envoi Telegram si signal confirmé
-                if signal != "ATTENDRE" and st.session_state["previous_signals"].get(name) == signal:
-                    send_telegram_msg(
-                        f"🦅 SIGNAL CONFIRMÉ\n{name}\n{signal}\nPrix {close:.5f}\nSL {sl:.5f}\nTP {tp:.5f}"
-                    )
 
                 results.append({
                     "Actif": name,
@@ -181,10 +185,16 @@ def run_engine():
                     "SL Prix": round(sl,5) if sl else "-",
                     "SL Pips": round(sl_pips,1) if sl else "-",
                     "TP Prix": round(tp,5) if tp else "-",
-                    "TP Pips": round(tp_pips,1) if tp else "-"
+                    "TP Pips": round(tp_pips,1) if tp else "-",
+                    "Commentaire": comment
                 })
 
                 new_signals[name] = signal
+
+                if signal != "ATTENDRE" and st.session_state["previous_signals"].get(name) == signal:
+                    send_telegram_msg(
+                        f"🦅 SIGNAL CONFIRMÉ\n{name}\n{signal}\nPrix {close:.5f}\nSL {sl:.5f}\nTP {tp:.5f}"
+                    )
 
             except:
                 continue
@@ -196,7 +206,7 @@ def run_engine():
 # AFFICHAGE
 # ─────────────────────────────────────────────
 st.title("🦅 Sniper V16.4 — Swing Forex PRO")
-st.info("Sessions Londres / NY • Filtre News • Breakout M15 • Confirmation H1 • SL/TP Prix & Pips • Score")
+st.info("Sessions Londres / NY • Filtre News • Breakout M15 • Confirmation H1 • SL/TP Prix & Pips • Commentaires")
 
 data = run_engine()
 
