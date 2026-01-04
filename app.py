@@ -64,12 +64,14 @@ def is_news_block(pair, news):
 # PIP FACTOR (FOREX EXACT)
 # ─────────────────────────────────────────────
 def pip_factor(pair):
+    if pair == "BTCUSD":
+        return 1
     return 100 if "JPY" in pair else 10000
 
 # ─────────────────────────────────────────────
 # CONFIG APP
 # ─────────────────────────────────────────────
-st.set_page_config(page_title="Sniper V16.4 — Swing Forex PRO", layout="wide")
+st.set_page_config(page_title="Sniper V16.4 — Swing Forex + BTC PRO", layout="wide")
 st_autorefresh(interval=180000, key="refresh")
 
 if "previous_signals" not in st.session_state:
@@ -86,6 +88,9 @@ ASSETS = {
         "AUDJPY=X","AUDCAD=X","AUDCHF=X","AUDNZD=X",
         "CADJPY=X","CADCHF=X","CHFJPY=X",
         "NZDJPY=X","NZDCAD=X","NZDCHF=X"
+    ],
+    "CRYPTO": [
+        "BTC-USD"
     ]
 }
 
@@ -99,7 +104,6 @@ def run_engine():
     tickers = [t for cat in ASSETS.values() for t in cat]
     new_signals = {}
 
-    # ───── TELEGRAM + PANDAS DOWNLOAD ─────
     data_m15 = yf.download(tickers, period="5d", interval="15m", group_by="ticker", progress=False)
     data_h1  = yf.download(tickers, period="21d", interval="1h", group_by="ticker", progress=False)
     data_h4  = yf.download(tickers, period="60d", interval="4h", group_by="ticker", progress=False)
@@ -108,15 +112,15 @@ def run_engine():
     for category, symbols in ASSETS.items():
         for ticker in symbols:
             try:
-                name = ticker.replace("=X","")
+                name = ticker.replace("=X","").replace("-USD","USD")
                 comment = "-"
 
                 # ───── Vérification news ─────
-                if is_news_block(name, news_today):
+                if category == "FOREX" and is_news_block(name, news_today):
                     comment = "News high impact"
-                
-                # ───── Vérification session ─────
-                if not is_trading_session():
+
+                # ───── Vérification session (uniquement Forex) ─────
+                if category == "FOREX" and not is_trading_session():
                     comment = "Hors session" if comment == "-" else comment + " + Hors session"
 
                 df_m15 = data_m15[ticker].dropna()
@@ -144,8 +148,11 @@ def run_engine():
                 p_di = adx_m.adx_pos().iloc[-1]
                 m_di = adx_m.adx_neg().iloc[-1]
 
-                # ───── Filtre ADX ─────
-                if adx_d < 18 or adx_h4 < 20:
+                # ───── Ajustement BTC ─────
+                adx_min_d = 18 if category == "FOREX" else 25
+                adx_min_h4 = 20 if category == "FOREX" else 25
+
+                if adx_d < adx_min_d or adx_h4 < adx_min_h4:
                     comment = "ADX Daily/H4 trop bas" if comment == "-" else comment + " + ADX Daily/H4 trop bas"
 
                 trend_up = close > ema200_d
@@ -155,8 +162,8 @@ def run_engine():
                     comment = "Conflit structure H1" if comment == "-" else comment + " + Conflit structure H1"
 
                 score = 0
-                if adx_val > 25: score += 45
-                elif adx_val > 20: score += 25
+                if adx_val > (30 if category == "CRYPTO" else 25): score += 45
+                elif adx_val > (25 if category == "CRYPTO" else 20): score += 25
                 if abs(p_di - m_di) > 10: score += 35
                 score += 20 if h1_ok else 0
 
@@ -172,19 +179,19 @@ def run_engine():
                         sl = close + atr * 1.6
                         tp = close - (sl - close) * 2.1
 
-                # ───── Pips exact ─────
                 factor = pip_factor(name)
                 sl_pips = abs(close - sl) * factor if sl else "-"
                 tp_pips = abs(tp - close) * factor if tp else "-"
 
                 results.append({
                     "Actif": name,
+                    "Catégorie": category,
                     "Signal": signal,
                     "Score": f"{score}%",
-                    "Prix": round(close,5),
-                    "SL Prix": round(sl,5) if sl else "-",
+                    "Prix": round(close,2 if category=="CRYPTO" else 5),
+                    "SL Prix": round(sl,2 if category=="CRYPTO" else 5) if sl else "-",
                     "SL Pips": round(sl_pips,1) if sl else "-",
-                    "TP Prix": round(tp,5) if tp else "-",
+                    "TP Prix": round(tp,2 if category=="CRYPTO" else 5) if tp else "-",
                     "TP Pips": round(tp_pips,1) if tp else "-",
                     "Commentaire": comment
                 })
@@ -193,7 +200,9 @@ def run_engine():
 
                 if signal != "ATTENDRE" and st.session_state["previous_signals"].get(name) == signal:
                     send_telegram_msg(
-                        f"🦅 SIGNAL CONFIRMÉ\n{name}\n{signal}\nPrix {close:.5f}\nSL {sl:.5f}\nTP {tp:.5f}"
+                        f"🦅 SIGNAL CONFIRMÉ\n{name}\n{signal}\nPrix {close:.2f}\nSL {sl:.2f}\nTP {tp:.2f}"
+                        if category == "CRYPTO"
+                        else f"🦅 SIGNAL CONFIRMÉ\n{name}\n{signal}\nPrix {close:.5f}\nSL {sl:.5f}\nTP {tp:.5f}"
                     )
 
             except:
@@ -205,8 +214,8 @@ def run_engine():
 # ─────────────────────────────────────────────
 # AFFICHAGE
 # ─────────────────────────────────────────────
-st.title("🦅 Sniper V16.4 — Swing Forex PRO")
-st.info("Sessions Londres / NY • Filtre News • Breakout M15 • Confirmation H1 • SL/TP Prix & Pips • Commentaires")
+st.title("🦅 Sniper V16.4 — Swing Forex + BTC PRO")
+st.info("Sessions Londres/NY • Filtre News (Forex) • Breakout M15 • Confirmation H1 • SL/TP Prix & Pips • BTC intégré")
 
 data = run_engine()
 
