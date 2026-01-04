@@ -27,6 +27,13 @@ def send_telegram_msg(message):
         pass
 
 # ─────────────────────────────────────────────
+# TEST TELEGRAM
+# ─────────────────────────────────────────────
+if st.button("📩 Test Telegram"):
+    send_telegram_msg("✅ Test Telegram réussi depuis Sniper V16.4")
+    st.success("Message de test envoyé ! Vérifie ton Telegram.")
+
+# ─────────────────────────────────────────────
 # FILTRE HORAIRE (PARIS)
 # ─────────────────────────────────────────────
 def is_trading_session():
@@ -134,12 +141,22 @@ def run_engine():
                 ema200_d = EMAIndicator(df_d1["Close"], 200).ema_indicator().iloc[-1]
                 ema50_h1 = EMAIndicator(df_h1["Close"], 50).ema_indicator().iloc[-1]
 
+                # ───── Breakout M15 ─────
                 box_high = df_m15["High"].iloc[-21:-1].max()
                 box_low  = df_m15["Low"].iloc[-21:-1].min()
                 buffer = atr * 0.15
-
                 breakout_up = close > box_high + buffer
                 breakout_dn = close < box_low - buffer
+
+                # ───── Breakout H1 (pour Forex) ─────
+                if category == "FOREX":
+                    box_high_h1 = df_h1["High"].iloc[-21:-1].max()
+                    box_low_h1 = df_h1["Low"].iloc[-21:-1].min()
+                    buffer_h1 = atr * 0.15
+                    breakout_up_h1 = close > box_high_h1 + buffer_h1
+                    breakout_dn_h1 = close < box_low_h1 - buffer_h1
+                    breakout_up = breakout_up and breakout_up_h1
+                    breakout_dn = breakout_dn and breakout_dn_h1
 
                 adx_d = ADXIndicator(df_d1["High"], df_d1["Low"], df_d1["Close"]).adx().iloc[-1]
                 adx_h4 = ADXIndicator(df_h4["High"], df_h4["Low"], df_h4["Close"]).adx().iloc[-1]
@@ -148,11 +165,10 @@ def run_engine():
                 p_di = adx_m.adx_pos().iloc[-1]
                 m_di = adx_m.adx_neg().iloc[-1]
 
-                # ───── Ajustement BTC ─────
-                adx_min_d = 18 if category == "FOREX" else 25
+                # ───── Ajustement rigoureux BTC/Forex ─────
+                adx_min_d = 18 if category == "FOREX" else 28
                 adx_min_h4 = 20 if category == "FOREX" else 25
 
-                # Vérification critique ADX Daily/H4
                 adx_block = False
                 if adx_d < adx_min_d or adx_h4 < adx_min_h4:
                     comment = "ADX Daily/H4 trop bas" if comment == "-" else comment + " + ADX Daily/H4 trop bas"
@@ -161,38 +177,57 @@ def run_engine():
                 trend_up = close > ema200_d
                 h1_ok = close > ema50_h1 if trend_up else close < ema50_h1
 
-                # Vérification critique H1
                 h1_block = False
                 if not h1_ok:
                     comment = "Conflit structure H1" if comment == "-" else comment + " + Conflit structure H1"
                     h1_block = True
 
-                # ───── Calcul du score rigoureux ─────
+                # ───── Calcul du score amélioré ─────
                 score = 0
-                if adx_val > (30 if category == "CRYPTO" else 25): score += 45
-                elif adx_val > (25 if category == "CRYPTO" else 20): score += 25
+                # ADX contribution
+                if adx_val > (30 if category=="CRYPTO" else 25): score += 45
+                elif adx_val > (25 if category=="CRYPTO" else 20): score += 25
+                # Force du mouvement
                 if abs(p_di - m_di) > 10: score += 35
+                # Confirmation H1
                 score += 20 if h1_ok else 0
+                # Breakout contribution pour crypto
+                if category=="CRYPTO":
+                    if breakout_up or breakout_dn:
+                        score += 15
+                    # ATR adaptée au score
+                    if atr > 0.5*close:
+                        score -= 10
+                    elif atr < 0.005*close:
+                        score -= 10
+                # Ajustement volatilité Forex
+                if category=="FOREX":
+                    if atr < 0.0005*close or atr > 0.005*close:
+                        score -= 10
+                # Filtre H4 pour BTC
+                if category=="CRYPTO":
+                    box_high_h4 = df_h4["High"].iloc[-21:-1].max()
+                    box_low_h4 = df_h4["Low"].iloc[-21:-1].min()
+                    breakout_h4 = close > box_high_h4 or close < box_low_h4
+                    if not breakout_h4:
+                        score -= 15
 
-                # Score minimum par catégorie
-                score_min = 70 if category == "FOREX" else 80
+                score_min = 70 if category=="FOREX" else 85
 
                 signal, sl, tp = "ATTENDRE", None, None
-
-                # ───── Signal uniquement si critères critiques OK et score suffisant ─────
                 if score >= score_min and not adx_block and not h1_block and comment == "-":
                     if trend_up and breakout_up:
                         signal = "ACHAT 🚀"
-                        sl = close - atr * 1.6
-                        tp = close + (close - sl) * 2.1
+                        sl = close - atr*1.6
+                        tp = close + (close-sl)*2.1
                     elif not trend_up and breakout_dn:
                         signal = "VENTE 🔻"
-                        sl = close + atr * 1.6
-                        tp = close - (sl - close) * 2.1
+                        sl = close + atr*1.6
+                        tp = close - (sl-close)*2.1
 
                 factor = pip_factor(name)
-                sl_pips = abs(close - sl) * factor if sl else "-"
-                tp_pips = abs(tp - close) * factor if tp else "-"
+                sl_pips = abs(close-sl)*factor if sl else "-"
+                tp_pips = abs(tp-close)*factor if tp else "-"
 
                 results.append({
                     "Actif": name,
@@ -209,10 +244,10 @@ def run_engine():
 
                 new_signals[name] = signal
 
-                if signal != "ATTENDRE" and st.session_state["previous_signals"].get(name) == signal:
+                if signal != "ATTENDRE" and st.session_state["previous_signals"].get(name)==signal:
                     send_telegram_msg(
                         f"🦅 SIGNAL CONFIRMÉ\n{name}\n{signal}\nPrix {close:.2f}\nSL {sl:.2f}\nTP {tp:.2f}"
-                        if category == "CRYPTO"
+                        if category=="CRYPTO"
                         else f"🦅 SIGNAL CONFIRMÉ\n{name}\n{signal}\nPrix {close:.5f}\nSL {sl:.5f}\nTP {tp:.5f}"
                     )
 
@@ -226,7 +261,7 @@ def run_engine():
 # AFFICHAGE
 # ─────────────────────────────────────────────
 st.title("🦅 Sniper V16.4 — Swing Forex + BTC PRO")
-st.info("Sessions Londres/NY • Filtre News (Forex) • Breakout M15 • Confirmation H1 • SL/TP Prix & Pips • BTC intégré • Score rigoureux")
+st.info("Sessions Londres/NY • Filtre News (Forex) • Breakout M15/H1/H4 • Confirmation H1 • SL/TP Prix & Pips • BTC intégré • Score rigoureux et fiable")
 
 data = run_engine()
 
