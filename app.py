@@ -122,11 +122,9 @@ def run_engine():
                 name = ticker.replace("=X","").replace("-USD","USD")
                 comment = "-"
 
-                # ───── Vérification news ─────
                 if category == "FOREX" and is_news_block(name, news_today):
                     comment = "News high impact"
 
-                # ───── Vérification session (uniquement Forex) ─────
                 if category == "FOREX" and not is_trading_session():
                     comment = "Hors session" if comment == "-" else comment + " + Hors session"
 
@@ -141,14 +139,12 @@ def run_engine():
                 ema200_d = EMAIndicator(df_d1["Close"], 200).ema_indicator().iloc[-1]
                 ema50_h1 = EMAIndicator(df_h1["Close"], 50).ema_indicator().iloc[-1]
 
-                # ───── Breakout M15 ─────
                 box_high = df_m15["High"].iloc[-21:-1].max()
                 box_low  = df_m15["Low"].iloc[-21:-1].min()
                 buffer = atr * 0.15
                 breakout_up = close > box_high + buffer
                 breakout_dn = close < box_low - buffer
 
-                # ───── Breakout H1 (pour Forex) ─────
                 if category == "FOREX":
                     box_high_h1 = df_h1["High"].iloc[-21:-1].max()
                     box_low_h1 = df_h1["Low"].iloc[-21:-1].min()
@@ -165,7 +161,6 @@ def run_engine():
                 p_di = adx_m.adx_pos().iloc[-1]
                 m_di = adx_m.adx_neg().iloc[-1]
 
-                # ───── Ajustement rigoureux BTC/Forex ─────
                 adx_min_d = 18 if category == "FOREX" else 28
                 adx_min_h4 = 20 if category == "FOREX" else 25
 
@@ -184,35 +179,23 @@ def run_engine():
 
                 # ───── Calcul du score amélioré ─────
                 score = 0
-                # ADX contribution
                 if adx_val > (30 if category=="CRYPTO" else 25): score += 45
                 elif adx_val > (25 if category=="CRYPTO" else 20): score += 25
-                # Force du mouvement
                 if abs(p_di - m_di) > 10: score += 35
-                # Confirmation H1
                 score += 20 if h1_ok else 0
-                # Breakout contribution pour crypto
                 if category=="CRYPTO":
-                    if breakout_up or breakout_dn:
-                        score += 15
-                    # ATR adaptée au score
-                    if atr > 0.5*close:
-                        score -= 10
-                    elif atr < 0.005*close:
-                        score -= 10
-                # Ajustement volatilité Forex
+                    if breakout_up or breakout_dn: score += 15
+                    if atr > 0.5*close: score -= 10
+                    elif atr < 0.005*close: score -= 10
                 if category=="FOREX":
-                    if atr < 0.0005*close or atr > 0.005*close:
-                        score -= 10
-                # Filtre H4 pour BTC
+                    if atr < 0.0005*close or atr > 0.005*close: score -= 10
                 if category=="CRYPTO":
                     box_high_h4 = df_h4["High"].iloc[-21:-1].max()
                     box_low_h4 = df_h4["Low"].iloc[-21:-1].min()
                     breakout_h4 = close > box_high_h4 or close < box_low_h4
-                    if not breakout_h4:
-                        score -= 15
+                    if not breakout_h4: score -= 15
 
-                # ───── Sécuriser le score minimum à 0 ─────
+                # ───── Sécurisation score négatif ─────
                 score = max(score, 0)
 
                 score_min = 70 if category=="FOREX" else 85
