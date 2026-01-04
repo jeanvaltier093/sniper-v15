@@ -212,6 +212,9 @@ def run_engine():
                     if not breakout_h4:
                         score -= 15
 
+                # ───── Sécuriser le score minimum à 0 ─────
+                score = max(score, 0)
+
                 score_min = 70 if category=="FOREX" else 85
 
                 signal, sl, tp = "ATTENDRE", None, None
