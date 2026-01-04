@@ -152,29 +152,40 @@ def run_engine():
                 adx_min_d = 18 if category == "FOREX" else 25
                 adx_min_h4 = 20 if category == "FOREX" else 25
 
+                # Vérification critique ADX Daily/H4
+                adx_block = False
                 if adx_d < adx_min_d or adx_h4 < adx_min_h4:
                     comment = "ADX Daily/H4 trop bas" if comment == "-" else comment + " + ADX Daily/H4 trop bas"
+                    adx_block = True
 
                 trend_up = close > ema200_d
                 h1_ok = close > ema50_h1 if trend_up else close < ema50_h1
 
+                # Vérification critique H1
+                h1_block = False
                 if not h1_ok:
                     comment = "Conflit structure H1" if comment == "-" else comment + " + Conflit structure H1"
+                    h1_block = True
 
+                # ───── Calcul du score rigoureux ─────
                 score = 0
                 if adx_val > (30 if category == "CRYPTO" else 25): score += 45
                 elif adx_val > (25 if category == "CRYPTO" else 20): score += 25
                 if abs(p_di - m_di) > 10: score += 35
                 score += 20 if h1_ok else 0
 
+                # Score minimum par catégorie
+                score_min = 70 if category == "FOREX" else 80
+
                 signal, sl, tp = "ATTENDRE", None, None
 
-                if score >= 70 and comment == "-":
-                    if trend_up and breakout_up and h1_ok:
+                # ───── Signal uniquement si critères critiques OK et score suffisant ─────
+                if score >= score_min and not adx_block and not h1_block and comment == "-":
+                    if trend_up and breakout_up:
                         signal = "ACHAT 🚀"
                         sl = close - atr * 1.6
                         tp = close + (close - sl) * 2.1
-                    elif not trend_up and breakout_dn and h1_ok:
+                    elif not trend_up and breakout_dn:
                         signal = "VENTE 🔻"
                         sl = close + atr * 1.6
                         tp = close - (sl - close) * 2.1
@@ -215,7 +226,7 @@ def run_engine():
 # AFFICHAGE
 # ─────────────────────────────────────────────
 st.title("🦅 Sniper V16.4 — Swing Forex + BTC PRO")
-st.info("Sessions Londres/NY • Filtre News (Forex) • Breakout M15 • Confirmation H1 • SL/TP Prix & Pips • BTC intégré")
+st.info("Sessions Londres/NY • Filtre News (Forex) • Breakout M15 • Confirmation H1 • SL/TP Prix & Pips • BTC intégré • Score rigoureux")
 
 data = run_engine()
 
