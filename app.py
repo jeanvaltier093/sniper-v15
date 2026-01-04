@@ -1,3 +1,86 @@
+import streamlit as st
+import pandas as pd
+import yfinance as yf
+import requests
+from ta.trend import EMAIndicator, ADXIndicator
+from ta.volatility import AverageTrueRange
+from streamlit_autorefresh import st_autorefresh
+import datetime
+from zoneinfo import ZoneInfo
+
+
+# ─────────────────────────────────────────────
+# CONFIG TELEGRAM (SECRET VIA STREAMLIT)
+# ─────────────────────────────────────────────
+if "TOKEN_TELEGRAM" not in st.session_state:
+    st.session_state["TOKEN_TELEGRAM"] = "8150058407:AAFg44ySihFKBO1UW69QZqi07otqeB2IK5s"
+if "CHAT_ID" not in st.session_state:
+    st.session_state["CHAT_ID"] = "1148025596"
+
+def send_telegram_msg(message):
+    try:
+        requests.get(
+            f"https://api.telegram.org/bot{st.session_state['TOKEN_TELEGRAM']}/sendMessage",
+            params={"chat_id": st.session_state["CHAT_ID"], "text": message},
+            timeout=10
+        )
+    except:
+        pass
+
+
+# ─────────────────────────────────────────────
+# TEST TELEGRAM
+# ─────────────────────────────────────────────
+if st.button("📩 Test Telegram"):
+    send_telegram_msg("✅ Test Telegram réussi depuis Sniper V16.4")
+    st.success("Message de test envoyé ! Vérifie ton Telegram.")
+
+
+# ─────────────────────────────────────────────
+# FILTRE HORAIRE (PARIS)
+# ─────────────────────────────────────────────
+def is_trading_session():
+    now = datetime.datetime.now(ZoneInfo("Europe/Paris"))
+    hour = now.hour
+    return (8 <= hour < 12) or (14 <= hour < 17)
+
+
+# ─────────────────────────────────────────────
+# FILTRE NEWS HIGH IMPACT (ECONDB)
+# ─────────────────────────────────────────────
+def get_high_impact_news():
+    try:
+        r = requests.get("https://econdb.com/api/calendar", timeout=10)
+        data = r.json()
+        news = []
+        for e in data:
+            if e["impact"] == "High":
+                news.append({
+                    "time": datetime.datetime.fromisoformat(e["date"]).replace(tzinfo=datetime.timezone.utc),
+                    "currency": e["currency"]
+                })
+        return news
+    except:
+        return []
+
+def is_news_block(pair, news):
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    for e in news:
+        if e["currency"] in pair:
+            if abs((e["time"] - now_utc).total_seconds()) < 1800:
+                return True
+    return False
+
+
+# ─────────────────────────────────────────────
+# PIP FACTOR (FOREX EXACT)
+# ─────────────────────────────────────────────
+def pip_factor(pair):
+    if pair == "BTCUSD":
+        return 1
+    return 100 if "JPY" in pair else 10000
+
+
 # ─────────────────────────────────────────────
 # CONFIG APP
 # ─────────────────────────────────────────────
@@ -6,6 +89,25 @@ st_autorefresh(interval=180000, key="refresh")
 
 if "previous_signals" not in st.session_state:
     st.session_state["previous_signals"] = {}
+
+
+# ─────────────────────────────────────────────
+# ACTIFS
+# ─────────────────────────────────────────────
+ASSETS = {
+    "FOREX": [
+        "EURUSD=X","GBPUSD=X","USDJPY=X","AUDUSD=X","USDCAD=X","USDCHF=X","NZDUSD=X",
+        "EURGBP=X","EURJPY=X","GBPJPY=X","EURAUD=X","EURCAD=X","EURCHF=X","EURNZD=X",
+        "GBPAUD=X","GBPCAD=X","GBPCHF=X","GBPNZD=X",
+        "AUDJPY=X","AUDCAD=X","AUDCHF=X","AUDNZD=X",
+        "CADJPY=X","CADCHF=X","CHFJPY=X",
+        "NZDJPY=X","NZDCAD=X","NZDCHF=X"
+    ],
+    "CRYPTO": [
+        "BTC-USD"
+    ]
+}
+
 
 # ─────────────────────────────────────────────
 # MOTEUR PRINCIPAL
@@ -42,12 +144,14 @@ def run_engine():
                 close = float(df_m15["Close"].iloc[-1])
                 atr = AverageTrueRange(df_m15["High"], df_m15["Low"], df_m15["Close"], 14).average_true_range().iloc[-1]
 
+                # --- NIVEAUX STATIQUES (S/R) ---
                 highest_20d = df_d1["High"].iloc[-21:-1].max()
                 lowest_20d = df_d1["Low"].iloc[-21:-1].min()
 
                 ema200_d = EMAIndicator(df_d1["Close"], 200).ema_indicator().iloc[-1]
                 ema50_h1 = EMAIndicator(df_h1["Close"], 50).ema_indicator().iloc[-1]
 
+                # --- BREAKOUT AVEC BUFFER OPTIMISÉ (0.30 ATR) ---
                 box_high = df_m15["High"].iloc[-21:-1].max()
                 box_low  = df_m15["Low"].iloc[-21:-1].min()
                 buffer = atr * 0.30 
@@ -92,7 +196,8 @@ def run_engine():
                 elif adx_val > (25 if category=="CRYPTO" else 20): score += 25
                 if abs(p_di - m_di) > 10: score += 35
                 score += 20 if h1_ok else 0
-
+                
+                # --- Bonus Score pour Breakout Zone Majeure ---
                 if trend_up and close > highest_20d: score += 10
                 if not trend_up and close < lowest_20d: score += 10
 
@@ -101,17 +206,16 @@ def run_engine():
                     if atr > 0.5*close: score -= 10
                 if category=="FOREX":
                     if atr < 0.0005*close or atr > 0.005*close: score -= 10
-
+                
                 score = max(score, 0)
                 
-                # <-- Score minimum fixé à 70 pour tous -->
-                score_min = 70  
+                # <<< MODIFICATION ICI : score_min = 70 pour tous, y compris BTC >>>
+                score_min = 70
 
                 signal, sl, tp = "ATTENDRE", None, None
-
+                
                 # --- LOGIQUE RR DYNAMIQUE AVEC S/R STATIQUES ---
-                # On ignore `comment == "-"` pour CRYPTO afin que BTC apparaisse
-                if score >= score_min and not adx_block and not h1_block:
+                if score >= score_min and not adx_block and not h1_block and comment == "-":
                     if trend_up and breakout_up:
                         signal = "ACHAT 🚀"
                         sl = min(lowest_20d, close - atr*2)
@@ -123,6 +227,7 @@ def run_engine():
                         potential_tp = close - (sl-close)*2.1
                         tp = min(lowest_20d, potential_tp)
 
+                # --- FILTRE RR FINAL ---
                 if sl and tp:
                     rr = abs(tp - close) / abs(close - sl)
                     if rr < 1.2:
@@ -158,3 +263,18 @@ def run_engine():
 
     st.session_state["previous_signals"] = new_signals
     return results
+
+
+# ─────────────────────────────────────────────
+# AFFICHAGE
+# ─────────────────────────────────────────────
+st.title("🦅 Sniper V16.4 — Swing Forex + BTC PRO")
+st.info("Version Optimisée : Buffer 0.30xATR | Détection Supports/Résistances 20j | Filtrage RR Dynamique")
+
+data = run_engine()
+
+if data:
+    df = pd.DataFrame(data)
+    st.dataframe(df, use_container_width=True)
+else:
+    st.warning("⏸ Aucun signal (hors horaires ou news actives)")
