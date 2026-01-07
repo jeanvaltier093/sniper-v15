@@ -158,96 +158,23 @@ def run_engine():
                     breakout_dn_h1 = close < box_low_h1 - buffer_h1  
                     breakout_up = breakout_up and breakout_up_h1  
                     breakout_dn = breakout_dn and breakout_dn_h1  
-  
-                adx_d = ADXIndicator(df_d1["High"], df_d1["Low"], df_d1["Close"]).adx().iloc[-1]  
-                adx_h4 = ADXIndicator(df_h4["High"], df_h4["Low"], df_h4["Close"]).adx().iloc[-1]  
-                adx_m = ADXIndicator(df_m15["High"], df_m15["Low"], df_m15["Close"])  
-                adx_val = adx_m.adx().iloc[-1]  
-                p_di = adx_m.adx_pos().iloc[-1]  
-                m_di = adx_m.adx_neg().iloc[-1]  
-  
-                adx_min_d = 18 if category == "FOREX" else 28  
-                adx_min_h4 = 20 if category == "FOREX" else 25  
-  
-                adx_block = False  
-                if adx_d < adx_min_d or adx_h4 < adx_min_h4:  
-                    comment = "ADX Daily/H4 trop bas" if comment == "-" else comment + " + ADX Daily/H4 trop bas"  
-                    adx_block = True  
-  
-                trend_up = close > ema200_d  
-                h1_ok = close > ema50_h1 if trend_up else close < ema50_h1  
-  
-                h1_block = False  
-                if not h1_ok:  
-                    comment = "Conflit structure H1" if comment == "-" else comment + " + Conflit structure H1"  
-                    h1_block = True  
-  
-                # ───── Calcul du score amélioré ─────  
-                score = 0  
-                if adx_val > (30 if category=="CRYPTO" else 25): score += 45  
-                elif adx_val > (25 if category=="CRYPTO" else 20): score += 25  
-                if abs(p_di - m_di) > 10: score += 35  
-                score += 20 if h1_ok else 0  
-                  
-                # --- Bonus Score pour Breakout Zone Majeure ---  
-                if trend_up and close > highest_20d: score += 10  
-                if not trend_up and close < lowest_20d: score += 10  
-  
-                if category=="CRYPTO":  
-                    if breakout_up or breakout_dn: score += 15  
-                    if atr > 0.5*close: score -= 10  
-                if category=="FOREX":  
-                    if atr < 0.0005*close or atr > 0.005*close: score -= 10  
-                  
-                score = max(score, 0)  
-                  
-                # <<< MODIFICATION : score_min = 70 pour tous les actifs >>>  
-                score_min = 70  
-  
-                signal, sl, tp = "ATTENDRE", None, None  
-  
-                # --- LOGIQUE RR DYNAMIQUE AVEC S/R REALISTES ---  
-                if score >= score_min and not adx_block and not h1_block and comment == "-":  
-                    if trend_up and breakout_up:  
-                        signal = "ACHAT 🚀"  
-                        sl = max(close - atr*2, lowest_20d)  
-                        tp = min(close + (close-sl)*2.1, highest_20d)  
-                    elif not trend_up and breakout_dn:  
-                        signal = "VENTE 🔻"  
-                        sl = min(close + atr*2, highest_20d)  
-                        tp = max(close - (sl-close)*2.1, lowest_20d)  
-  
-                # --- FILTRE RR FINAL ---  
-                if sl and tp:  
-                    rr = abs(tp - close) / abs(close - sl)  
-                    if rr < 1.2:  
-                        signal = "ATTENDRE"  
-                        comment = "RR insuffisant (S/R proche)"  
-  
-                factor = pip_factor(name)  
-                sl_pips = abs(close-sl)*factor if sl else "-"  
-                tp_pips = abs(tp-close)*factor if tp else "-"  
-  
-                results.append({  
-                    "Actif": name,  
-                    "Catégorie": category,  
-                    "Signal": signal,  
-                    "Score": f"{score}%",  
-                    "Prix": round(close,2 if category=="CRYPTO" else 5),  
-                    "SL Prix": round(sl,2 if category=="CRYPTO" else 5) if sl else "-",  
-                    "SL Pips": round(sl_pips,1) if sl else "-",  
-                    "TP Prix": round(tp,2 if category=="CRYPTO" else 5) if tp else "-",  
-                    "TP Pips": round(tp_pips,1) if tp else "-",  
-                    "Commentaire": comment  
-                })  
-  
-                new_signals[name] = signal  
-  
-                if signal != "ATTENDRE" and st.session_state["previous_signals"].get(name) != signal:  
-                    send_telegram_msg(  
-                        f"🦅 SIGNAL SNIPER V16.4\n{name} | {signal}\nScore: {score}%\nPrix: {close}\nSL: {sl}\nTP: {tp}"  
-                    )  
-  
+
+                # ───────── FILTRE RR FINAL CORRIGÉ IG (SEULE MODIFICATION) ─────────
+                if sl and tp:
+                    if category == "FOREX":
+                        spread = 0.00012 if "JPY" not in name else 0.0016
+                    else:
+                        spread = close * 0.0005
+
+                    risk = abs(close - sl) + spread
+                    reward = abs(tp - close) - spread
+                    rr = reward / risk if risk > 0 else 0
+
+                    if rr < 1.4:
+                        signal = "ATTENDRE"
+                        comment = "RR réel IG insuffisant après spread"
+                # ─────────────────────────────────────────────────────────────────
+
             except:  
                 continue  
   
@@ -266,4 +193,4 @@ if data:
     df = pd.DataFrame(data)  
     st.dataframe(df, use_container_width=True)  
 else:  
-    st.warning("⏸ Aucun signal (hors horaires ou news actives)")
+    st.warning("⏸ Aucun signal (hors horaires ou news actives)")  
