@@ -133,12 +133,13 @@ def run_engine():
                 if category == "FOREX" and not is_trading_session():      
                     comment = "Hors session" if comment == "-" else comment + " + Hors session"      
       
-                # ✅ SEULE LIGNE MODIFIÉE — BOUGIE CLÔTURÉE  
+                # ✅ SEULE MODIF : Clôture sur bougie précédente  
                 close = float(df_m15["Close"].iloc[-2])      
-
-                # ✅ ATR H4 pour TP/SL, M15 pour breakout  
+      
+                # ATR M15 pour breakout et détection fine
                 atr_m15 = AverageTrueRange(df_m15["High"], df_m15["Low"], df_m15["Close"], 14).average_true_range().iloc[-1]      
-                atr_h4  = AverageTrueRange(df_h4["High"], df_h4["Low"], df_h4["Close"], 14).average_true_range().iloc[-1]      
+                # ATR H4 pour TP/SL swing
+                atr_h4 = AverageTrueRange(df_h4["High"], df_h4["Low"], df_h4["Close"], 14).average_true_range().iloc[-1]      
       
                 highest_20d = df_d1["High"].iloc[-21:-1].max()      
                 lowest_20d = df_d1["Low"].iloc[-21:-1].min()      
@@ -158,16 +159,8 @@ def run_engine():
                     buffer_h1 = atr_m15 * 0.30      
                     breakout_up_h1 = close > box_high_h1 + buffer_h1      
                     breakout_dn_h1 = close < box_low_h1 - buffer_h1      
-
-                    # ✅ Ajout H4 pour confirmer le breakout majeur
-                    box_high_h4 = df_h4["High"].iloc[-21:-1].max()
-                    box_low_h4  = df_h4["Low"].iloc[-21:-1].min()
-                    buffer_h4   = atr_m15 * 0.30
-                    breakout_up_h4 = close > box_high_h4 + buffer_h4
-                    breakout_dn_h4 = close < box_low_h4 - buffer_h4
-
-                    breakout_up = breakout_up and breakout_up_h1 and breakout_up_h4     
-                    breakout_dn = breakout_dn and breakout_dn_h1 and breakout_dn_h4     
+                    breakout_up = breakout_up and breakout_up_h1      
+                    breakout_dn = breakout_dn and breakout_dn_h1      
       
                 adx_d = ADXIndicator(df_d1["High"], df_d1["Low"], df_d1["Close"]).adx().iloc[-1]      
                 adx_h4 = ADXIndicator(df_h4["High"], df_h4["Low"], df_h4["Close"]).adx().iloc[-1]      
