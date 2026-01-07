@@ -133,7 +133,9 @@ def run_engine():
                 if category == "FOREX" and not is_trading_session():    
                     comment = "Hors session" if comment == "-" else comment + " + Hors session"    
     
-                close = float(df_m15["Close"].iloc[-1])    
+                # ✅ SEULE LIGNE MODIFIÉE — BOUGIE CLÔTURÉE
+                close = float(df_m15["Close"].iloc[-2])    
+    
                 atr = AverageTrueRange(df_m15["High"], df_m15["Low"], df_m15["Close"], 14).average_true_range().iloc[-1]    
     
                 highest_20d = df_d1["High"].iloc[-21:-1].max()    
@@ -207,20 +209,19 @@ def run_engine():
                         sl = min(close + atr*2, highest_20d)    
                         tp = max(close - (sl-close)*2.1, lowest_20d)    
     
-                # ─── FILTRE RR FINAL CORRIGÉ (SPREAD IG) ───
                 if sl and tp:    
-                    if category == "FOREX":
-                        spread = 0.00012 if "JPY" not in name else 0.0016
-                    else:
-                        spread = close * 0.0005
-
-                    risk = abs(close - sl) + spread
-                    reward = abs(tp - close) - spread
-                    rr = reward / risk if risk > 0 else 0
-
-                    if rr < 1.4:
-                        signal = "ATTENDRE"
-                        comment = "RR réel IG insuffisant après spread"
+                    if category == "FOREX":    
+                        spread = 0.00012 if "JPY" not in name else 0.0016    
+                    else:    
+                        spread = close * 0.0005    
+    
+                    risk = abs(close - sl) + spread    
+                    reward = abs(tp - close) - spread    
+                    rr = reward / risk if risk > 0 else 0    
+    
+                    if rr < 1.4:    
+                        signal = "ATTENDRE"    
+                        comment = "RR réel IG insuffisant après spread"    
     
                 factor = pip_factor(name)    
                 sl_pips = abs(close-sl)*factor if sl else "-"    
@@ -264,4 +265,4 @@ if data:
     df = pd.DataFrame(data)    
     st.dataframe(df, use_container_width=True)    
 else:    
-    st.warning("⏸ Aucun signal (hors horaires ou news actives)")
+    st.warning("⏸ Aucun signal (hors horaires ou news actives)")    
