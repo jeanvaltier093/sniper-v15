@@ -144,21 +144,22 @@ def run_engine():
                 ema200_d = EMAIndicator(df_d1["Close"], 200).ema_indicator().iloc[-1]        
                 ema50_h1 = EMAIndicator(df_h1["Close"], 50).ema_indicator().iloc[-1]        
         
+                # --- BREAKOUT M15 ---
                 box_high = df_m15["High"].iloc[-21:-1].max()        
                 box_low  = df_m15["Low"].iloc[-21:-1].min()        
                 buffer = atr_m15 * 0.30        
                 breakout_up = close > box_high + buffer        
                 breakout_dn = close < box_low - buffer        
         
-                if category == "FOREX":        
+                # --- BREAKOUT H1 BONUS (PAS BLOQUEUR) ---
+                h1_bonus = 0
+                if category == "FOREX":
                     box_high_h1 = df_h1["High"].iloc[-21:-1].max()        
                     box_low_h1 = df_h1["Low"].iloc[-21:-1].min()        
-                    buffer_h1 = atr_m15 * 0.30        
-                    breakout_up_h1 = close > box_high_h1 + buffer_h1        
-                    breakout_dn_h1 = close < box_low_h1 - buffer_h1        
-                    breakout_up = breakout_up and breakout_up_h1        
-                    breakout_dn = breakout_dn and breakout_dn_h1        
+                    if close > box_high_h1 or close < box_low_h1:
+                        h1_bonus = 15
         
+                # --- ADX ---
                 adx_d = ADXIndicator(df_d1["High"], df_d1["Low"], df_d1["Close"]).adx().iloc[-1]        
                 adx_h4 = ADXIndicator(df_h4["High"], df_h4["Low"], df_h4["Close"]).adx().iloc[-1]        
                 adx_m = ADXIndicator(df_m15["High"], df_m15["Low"], df_m15["Close"])        
@@ -166,21 +167,23 @@ def run_engine():
                 p_di = adx_m.adx_pos().iloc[-1]        
                 m_di = adx_m.adx_neg().iloc[-1]        
         
-                adx_min_d = 18 if category == "FOREX" else 28        
-                adx_min_h4 = 20 if category == "FOREX" else 25        
+                adx_min_d = 17 if category == "FOREX" else 28        
+                adx_min_h4 = 18 if category == "FOREX" else 25        
         
                 adx_block = False        
                 if adx_d < adx_min_d or adx_h4 < adx_min_h4:        
-                    comment = "ADX Daily/H4 trop bas" if comment == "-" else comment + " + ADX Daily/H4 trop bas"        
+                    comment = "ADX Faible (D1/H4)" if comment == "-" else comment + " + ADX Faible"        
                     adx_block = True        
         
                 trend_up = close > ema200_d        
                 h1_ok = close > ema50_h1 if trend_up else close < ema50_h1        
         
-                h1_block = False        
-                if not h1_ok:        
-                    comment = "Conflit structure H1" if comment == "-" else comment + " + Conflit structure H1"        
-                    h1_block = True        
+                # --- RANGE H4 propre : bloque breakout M15 ---
+                h4_range = df_h4["High"].max() - df_h4["Low"].min()
+                if category == "FOREX" and (breakout_up or breakout_dn) and h4_range < 2*atr_h4:
+                    breakout_up = False
+                    breakout_dn = False
+                    comment = "Breakout M15 interdit contre range H4" if comment == "-" else comment + " + Breakout M15 interdit contre range H4"
         
                 score = 0        
                 if adx_val > (30 if category=="CRYPTO" else 25): score += 45        
@@ -194,12 +197,16 @@ def run_engine():
                     if atr_m15 > 0.5*close: score -= 10        
                 if category=="FOREX":        
                     if atr_m15 < 0.0005*close or atr_m15 > 0.005*close: score -= 10        
+
+                # --- AJOUT BONUS H1 ---
+                score += h1_bonus
+        
                 score = max(score, 0)        
-                score_min = 70        
+                score_min = 65  # MODIF
         
                 signal, sl, tp = "ATTENDRE", None, None        
         
-                if score >= score_min and not adx_block and not h1_block and comment == "-":        
+                if score >= score_min and not adx_block and comment == "-":        
                     if trend_up and breakout_up:        
                         signal = "ACHAT 🚀"        
                         sl = max(close - atr_h4*2, lowest_20d)        
