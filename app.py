@@ -156,8 +156,8 @@ def run_engine():
                 breakout_dn_close = close < box_low - buffer                  
                 bull_power = (close - low) / (high - low + 1e-6)                  
                 bear_power = (high - close) / (high - low + 1e-6)                  
-                breakout_up_wick = high > box_high + buffer and bull_power > 0.65                  
-                breakout_dn_wick = low  < box_low  - buffer and bear_power > 0.65                  
+                breakout_up_wick = high > box_high + buffer and bull_power > 0.55                  
+                breakout_dn_wick = low  < box_low  - buffer and bear_power > 0.55                  
                 breakout_up = breakout_up_close or breakout_up_wick                  
                 breakout_dn = breakout_dn_close or breakout_dn_wick                  
                   
@@ -258,7 +258,6 @@ def run_engine():
                   
                 new_signals[name] = signal                  
                   
-                # --- ENVOI TELEGRAM AVEC SCORE ET RR ---                  
                 if signal != "ATTENDRE" and st.session_state["previous_signals"].get(name) != signal:                  
                     send_telegram_msg(                  
                         f"🦅 SIGNAL SNIPER V16.4\n{name} | {signal}\nScore: {score}%\nPrix: {close}\nSL: {sl}\nTP: {tp}\nRR: {round(rr,2)}"                  
@@ -281,5 +280,8 @@ data = run_engine()
 if data:                  
     df = pd.DataFrame(data)                  
     st.dataframe(df, use_container_width=True)                  
+else:                  
+    st.warning("⏸ Aucun signal (hors horaires ou news actives)")  
+               
 else:                  
     st.warning("⏸ Aucun signal (hors horaires ou news actives)")  
