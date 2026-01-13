@@ -154,20 +154,24 @@ def run_engine():
                 # --- BREAKOUT FLEXIBLE M15 ---                  
                 breakout_up_close = close > box_high + buffer                  
                 breakout_dn_close = close < box_low - buffer                  
+                
                 bull_power = (close - low) / (high - low + 1e-6)                  
                 bear_power = (high - close) / (high - low + 1e-6)                  
+                
                 breakout_up_wick = high > box_high + buffer and bull_power > 0.55                  
                 breakout_dn_wick = low  < box_low  - buffer and bear_power > 0.55                  
                 breakout_up = breakout_up_close or breakout_up_wick                  
                 breakout_dn = breakout_dn_close or breakout_dn_wick                  
                   
+                h1_breakout_bonus = 0
                 if category == "FOREX":                  
+                    # --- BREAKOUT H1 = BONUS, PAS BLOQUEUR ---                  
                     box_high_h1 = df_h1["High"].iloc[-21:-1].max()                  
                     box_low_h1 = df_h1["Low"].iloc[-21:-1].min()                  
-                    h1_breakout_bonus = 0                  
                     if close > box_high_h1 or close < box_low_h1:                  
                         h1_breakout_bonus = 15                  
                   
+                # --- INDICATEURS ADX ---                  
                 adx_d = ADXIndicator(df_d1["High"], df_d1["Low"], df_d1["Close"]).adx().iloc[-1]                  
                 adx_h4 = ADXIndicator(df_h4["High"], df_h4["Low"], df_h4["Close"]).adx().iloc[-1]                  
                 adx_m = ADXIndicator(df_m15["High"], df_m15["Low"], df_m15["Close"])                  
@@ -198,17 +202,20 @@ def run_engine():
                     if atr_m15 > 0.5*close: score -= 10                  
                 if category=="FOREX":                  
                     if atr_m15 < 0.0005*close or atr_m15 > 0.005*close: score -= 10                  
+                    # --- INTERDICTION M15 SI RANGE H4 ---                  
                     box_high_h4 = df_h4["High"].iloc[-21:-1].max()                  
                     box_low_h4 = df_h4["Low"].iloc[-21:-1].min()                  
                     if box_high_h4 - box_low_h4 < 0.0005:                  
                         breakout_up = breakout_dn = False                  
+                    # --- AJOUT BONUS H1 ---                  
                     score += h1_breakout_bonus                  
                   
                 score = max(score, 0)                  
                 score_min = 65                  
                   
                 signal, sl, tp = "ATTENDRE", None, None                  
-                  
+                rr = 0
+
                 if score >= score_min and not adx_block and comment == "-":                  
                     if trend_up and breakout_up:                  
                         signal = "ACHAT 🚀"                  
@@ -233,6 +240,7 @@ def run_engine():
                         signal = "ATTENDRE"                  
                         comment = "RR réel IG insuffisant après spread"                  
           
+                # 🧠 RAISON OBLIGATOIRE SI ATTENTE          
                 if signal == "ATTENDRE" and comment == "-":          
                     if score >= score_min:          
                         comment = "Setup valide mais breakout non confirmé"          
@@ -260,7 +268,7 @@ def run_engine():
                   
                 if signal != "ATTENDRE" and st.session_state["previous_signals"].get(name) != signal:                  
                     send_telegram_msg(                  
-                        f"🦅 SIGNAL SNIPER V16.4\n{name} | {signal}\nScore: {score}%\nPrix: {close}\nSL: {sl}\nTP: {tp}\nRR: {round(rr,2)}"                  
+                        f"🦅 SIGNAL SNIPER V16.4\n{name} | {signal}\nScore: {score}%\nRR: {round(rr,2)}\nPrix: {close}\nSL: {sl}\nTP: {tp}"                  
                     )                  
                   
             except:                  
@@ -281,7 +289,4 @@ if data:
     df = pd.DataFrame(data)                  
     st.dataframe(df, use_container_width=True)                  
 else:                  
-    st.warning("⏸ Aucun signal (hors horaires ou news actives)")  
-               
-else:                  
-    st.warning("⏸ Aucun signal (hors horaires ou news actives)")  
+    st.warning("⏸ Aucun signal (hors horaires ou news actives)")
