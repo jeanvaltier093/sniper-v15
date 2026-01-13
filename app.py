@@ -146,32 +146,30 @@ def run_engine():
                 ema200_d = EMAIndicator(df_d1["Close"], 200).ema_indicator().iloc[-1]                  
                 ema50_h1 = EMAIndicator(df_h1["Close"], 50).ema_indicator().iloc[-1]                  
                   
-                # --- BUFFER M15 PLUS RÉACTIF ---                  
                 box_high = df_m15["High"].iloc[-21:-1].max()                  
                 box_low  = df_m15["Low"].iloc[-21:-1].min()                  
                 buffer = atr_m15 * 0.20                  
+                tolerance = buffer * 0.30                  
                   
-                # --- BREAKOUT FLEXIBLE M15 ---                  
-                breakout_up_close = close > box_high + buffer                  
-                breakout_dn_close = close < box_low - buffer                  
-                
+                breakout_up_close = close > box_high + buffer - tolerance                  
+                breakout_dn_close = close < box_low - buffer + tolerance                  
+                  
                 bull_power = (close - low) / (high - low + 1e-6)                  
                 bear_power = (high - close) / (high - low + 1e-6)                  
-                
+                  
                 breakout_up_wick = high > box_high + buffer and bull_power > 0.55                  
                 breakout_dn_wick = low  < box_low  - buffer and bear_power > 0.55                  
+                  
                 breakout_up = breakout_up_close or breakout_up_wick                  
                 breakout_dn = breakout_dn_close or breakout_dn_wick                  
                   
-                h1_breakout_bonus = 0
+                h1_breakout_bonus = 0                  
                 if category == "FOREX":                  
-                    # --- BREAKOUT H1 = BONUS, PAS BLOQUEUR ---                  
                     box_high_h1 = df_h1["High"].iloc[-21:-1].max()                  
                     box_low_h1 = df_h1["Low"].iloc[-21:-1].min()                  
                     if close > box_high_h1 or close < box_low_h1:                  
                         h1_breakout_bonus = 15                  
                   
-                # --- INDICATEURS ADX ---                  
                 adx_d = ADXIndicator(df_d1["High"], df_d1["Low"], df_d1["Close"]).adx().iloc[-1]                  
                 adx_h4 = ADXIndicator(df_h4["High"], df_h4["Low"], df_h4["Close"]).adx().iloc[-1]                  
                 adx_m = ADXIndicator(df_m15["High"], df_m15["Low"], df_m15["Close"])                  
@@ -190,7 +188,6 @@ def run_engine():
                 trend_up = close > ema200_d                  
                 h1_ok = close > ema50_h1 if trend_up else close < ema50_h1                  
                   
-                # --- SCORE ---                  
                 score = 0                  
                 if adx_val > (30 if category=="CRYPTO" else 25): score += 45                  
                 if abs(p_di - m_di) > 10: score += 35                  
@@ -202,20 +199,18 @@ def run_engine():
                     if atr_m15 > 0.5*close: score -= 10                  
                 if category=="FOREX":                  
                     if atr_m15 < 0.0005*close or atr_m15 > 0.005*close: score -= 10                  
-                    # --- INTERDICTION M15 SI RANGE H4 ---                  
                     box_high_h4 = df_h4["High"].iloc[-21:-1].max()                  
                     box_low_h4 = df_h4["Low"].iloc[-21:-1].min()                  
                     if box_high_h4 - box_low_h4 < 0.0005:                  
                         breakout_up = breakout_dn = False                  
-                    # --- AJOUT BONUS H1 ---                  
                     score += h1_breakout_bonus                  
                   
                 score = max(score, 0)                  
                 score_min = 65                  
                   
                 signal, sl, tp = "ATTENDRE", None, None                  
-                rr = 0
-
+                rr = 0                  
+                  
                 if score >= score_min and not adx_block and comment == "-":                  
                     if trend_up and breakout_up:                  
                         signal = "ACHAT 🚀"                  
@@ -239,13 +234,12 @@ def run_engine():
                     if rr < 1.4:                  
                         signal = "ATTENDRE"                  
                         comment = "RR réel IG insuffisant après spread"                  
-          
-                # 🧠 RAISON OBLIGATOIRE SI ATTENTE          
-                if signal == "ATTENDRE" and comment == "-":          
-                    if score >= score_min:          
-                        comment = "Setup valide mais breakout non confirmé"          
-                    else:          
-                        comment = "Conditions insuffisantes"          
+                  
+                if signal == "ATTENDRE" and comment == "-":                  
+                    if score >= score_min:                  
+                        comment = "Setup valide mais breakout non confirmé"                  
+                    else:                  
+                        comment = "Conditions insuffisantes"                  
                   
                 factor = pip_factor(name)                  
                 sl_pips = abs(close-sl)*factor if sl else "-"                  
@@ -289,4 +283,4 @@ if data:
     df = pd.DataFrame(data)                  
     st.dataframe(df, use_container_width=True)                  
 else:                  
-    st.warning("⏸ Aucun signal (hors horaires ou news actives)")
+    st.warning("⏸ Aucun signal (hors horaires ou news actives)")                  
