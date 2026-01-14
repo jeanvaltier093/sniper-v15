@@ -127,11 +127,16 @@ def run_engine():
                 df_h4  = data_h4[ticker].dropna()                  
                 df_d1  = data_d1[ticker].dropna()                  
                   
+                news_block = False
+                session_block = False
+
                 if category == "FOREX" and is_news_block(name, news_today):                  
                     comment = "News high impact"                  
+                    news_block = True
                   
                 if category == "FOREX" and not is_trading_session():                  
                     comment = "Hors session" if comment == "-" else comment + " + Hors session"                  
+                    session_block = True
                   
                 close = float(df_m15["Close"].iloc[-2])                  
                 high  = float(df_m15["High"].iloc[-2])                  
@@ -184,6 +189,8 @@ def run_engine():
                 if adx_d < adx_min_d or adx_h4 < adx_min_h4:                  
                     comment = "ADX Faible (D1/H4)" if comment == "-" else comment + " + ADX Faible"                  
                     adx_block = True                  
+
+                blocked = adx_block or news_block or session_block
                   
                 trend_up = close > ema200_d                  
                 h1_ok = close > ema50_h1 if trend_up else close < ema50_h1                  
@@ -211,7 +218,7 @@ def run_engine():
                 signal, sl, tp = "ATTENDRE", None, None                  
                 rr = 0                  
                   
-                if score >= score_min and not adx_block and comment == "-":                  
+                if score >= score_min and not blocked:                  
                     if trend_up and breakout_up:                  
                         signal = "ACHAT 🚀"                  
                         sl = max(close - atr_h4*2, lowest_20d)                  
