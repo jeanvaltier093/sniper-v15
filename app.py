@@ -86,6 +86,10 @@ st_autorefresh(interval=180000, key="refresh")
 # Initialisation du suivi des trades pour éviter les doublons avant clôture
 if "active_trades" not in st.session_state:                                
     st.session_state["active_trades"] = {}                                
+
+# Initialisation de l'historique des signaux
+if "trade_history" not in st.session_state:
+    st.session_state["trade_history"] = []
     
 # ─────────────────────────────────────────────                                
 # ACTIFS                                
@@ -107,7 +111,6 @@ ASSETS = {
 # ─────────────────────────────────────────────                                
 # MOTEUR PRINCIPAL                                
 # ─────────────────────────────────────────────                                
-@st.cache_data(ttl=170)                                
 def run_engine():                                
     results = []                                
     news_today = get_high_impact_news()                                
@@ -140,9 +143,9 @@ def run_engine():
                     comment = "Hors session" if comment == "-" else comment + " + Hors session"                                
                     session_block = True              
                                 
-                close = float(df_m15["Close"].iloc[-2])                                
-                high  = float(df_m15["High"].iloc[-2])                                
-                low   = float(df_m15["Low"].iloc[-2])                                
+                close = float(df_m15["Close"].iloc[-1])                                
+                high  = float(df_m15["High"].iloc[-1])                                
+                low   = float(df_m15["Low"].iloc[-1])                                
                                 
                 atr_m15 = AverageTrueRange(df_m15["High"], df_m15["Low"], df_m15["Close"], 14).average_true_range().iloc[-1]                                
                 atr_h4 = AverageTrueRange(df_h4["High"], df_h4["Low"], df_h4["Close"], 14).average_true_range().iloc[-1]                                
@@ -258,12 +261,29 @@ def run_engine():
                 # Logique de gestion de position active pour éviter les doublons
                 if name in st.session_state["active_trades"]:
                     trade = st.session_state["active_trades"][name]
-                    # Vérifier si le TP ou SL a été touché (Clôture du trade)
-                    if (trade["type"] == "ACHAT 🚀" and (close >= trade["tp"] or close <= trade["sl"])) or \
-                       (trade["type"] == "VENTE 🔻" and (close <= trade["tp"] or close >= trade["sl"])):
+                    status = "EN COURS"
+                    
+                    # Vérifier si TP ou SL touché
+                    if trade["type"] == "ACHAT 🚀":
+                        if close >= trade["tp"]: status = "GAGNANT ✅"
+                        elif close <= trade["sl"]: status = "PERDANT ❌"
+                    elif trade["type"] == "VENTE 🔻":
+                        if close <= trade["tp"]: status = "GAGNANT ✅"
+                        elif close >= trade["sl"]: status = "PERDANT ❌"
+                    
+                    if status != "EN COURS":
+                        # Archiver dans l'historique
+                        st.session_state["trade_history"].append({
+                            "Heure": datetime.datetime.now(ZoneInfo("Europe/Paris")).strftime("%H:%M"),
+                            "Actif": name,
+                            "Direction": trade["type"],
+                            "Résultat": status,
+                            "Prix Entrée": trade["entry"],
+                            "Prix Sortie": round(close, 5)
+                        })
                         del st.session_state["active_trades"][name]
                     else:
-                        # Trade toujours en cours, on bloque le signal Telegram mais on affiche l'état
+                        # Trade toujours en cours
                         if signal != "ATTENDRE":
                             signal = "EN COURS ⏳"
                             comment = f"Trade déjà actif (TP: {trade['tp']} / SL: {trade['sl']})"
@@ -294,7 +314,12 @@ def run_engine():
                                 
                 # Envoi Telegram uniquement si nouveau trade et aucune position active
                 if signal in ["ACHAT 🚀", "VENTE 🔻"] and name not in st.session_state["active_trades"]:
-                    st.session_state["active_trades"][name] = {"type": signal, "sl": sl, "tp": tp}
+                    st.session_state["active_trades"][name] = {
+                        "type": signal, 
+                        "sl": round(sl, 5), 
+                        "tp": round(tp, 5),
+                        "entry": round(close, 5)
+                    }
                     send_telegram_msg(                                
                         f"🦅 SIGNAL SNIPER V16.4.1\n{name} | {signal}\nFiabilité: {reliability} | Score: {score}%\nRR: {round(rr,2)}\nPrix: {close}\nSL: {sl}\nTP: {tp}\nCommentaire: {comment}"                
                     )                                
@@ -317,3 +342,12 @@ if data:
     st.dataframe(df, use_container_width=True)                                
 else:                                
     st.warning("⏸ Aucun signal (hors horaires ou news actives)")
+
+# Section Historique
+st.markdown("---")
+st.subheader("📜 Historique des Signaux Clôturés")
+if st.session_state["trade_history"]:
+    hist_df = pd.DataFrame(st.session_state["trade_history"]).sort_index(ascending=False)
+    st.table(hist_df)
+else:
+    st.write("Aucun trade clôturé pour le moment.")
