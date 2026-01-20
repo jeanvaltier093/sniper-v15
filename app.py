@@ -30,16 +30,17 @@ def send_telegram_msg(message):
 # TEST TELEGRAM                                
 # ─────────────────────────────────────────────                                
 if st.button("📩 Test Telegram"):                                
-    send_telegram_msg("✅ Test Telegram réussi depuis Sniper V16.4")                                
+    send_telegram_msg("✅ Test Telegram réussi depuis Sniper V16.4.1")                                
     st.success("Message de test envoyé ! Vérifie ton Telegram.")                                
     
 # ─────────────────────────────────────────────                                
-# FILTRE HORAIRE (PARIS)                                
+# FILTRE HORAIRE (PARIS) - OPTIMISÉ POUR 3-4 SIGN AUX/JOUR                              
 # ─────────────────────────────────────────────                                
 def is_trading_session():                                
     now = datetime.datetime.now(ZoneInfo("Europe/Paris"))                                
     hour = now.hour                                
-    return (8 <= hour < 12) or (14 <= hour < 17)                                
+    # Session élargie pour capter l'Open Londres, New York et la session US complète
+    return 8 <= hour < 20                                
     
 # ─────────────────────────────────────────────                                
 # FILTRE NEWS HIGH IMPACT (ECONDB)                                
@@ -63,7 +64,8 @@ def is_news_block(pair, news):
     now_utc = datetime.datetime.now(datetime.timezone.utc)                                
     for e in news:                                
         if e["currency"] in pair:                                
-            if abs((e["time"] - now_utc).total_seconds()) < 1800:                                
+            # Blocage réduit à 15 minutes pour être plus opportuniste
+            if abs((e["time"] - now_utc).total_seconds()) < 900:                                
                 return True                                
     return False                                
     
@@ -78,7 +80,7 @@ def pip_factor(pair):
 # ─────────────────────────────────────────────                                
 # CONFIG APP                                
 # ─────────────────────────────────────────────                                
-st.set_page_config(page_title="Sniper V16.4 — Swing Forex + BTC PRO", layout="wide")                                
+st.set_page_config(page_title="Sniper V16.4.1 — Swing Forex + BTC PRO", layout="wide")                                
 st_autorefresh(interval=180000, key="refresh")                                
     
 if "previous_signals" not in st.session_state:                                
@@ -182,22 +184,24 @@ def run_engine():
                 p_di = adx_m.adx_pos().iloc[-1]                                
                 m_di = adx_m.adx_neg().iloc[-1]                                
               
+                # ADX H4 assoupli à 12 pour détecter les débuts de tendances
                 adx_min_d = 17 if category == "FOREX" else 28                                
-                adx_min_h4 = 14 if category == "FOREX" else 25                                
+                adx_min_h4 = 12 if category == "FOREX" else 25                                
                                 
                 adx_block = False                                
                 if adx_h4 < adx_min_h4:                                
                     comment = "ADX Faible (H4)" if comment == "-" else comment + " + ADX Faible (H4)"                                
                     adx_block = True                                
                                 
-                blocked = adx_block or news_block or session_block              
+                blocked = adx_block or news_block or session_block                                
                                 
                 trend_up = close > ema200_d                                
                 h1_ok = close > ema50_h1 if trend_up else close < ema50_h1                                
                                 
                 score = 0                                
-                if adx_val > (30 if category=="CRYPTO" else 25): score += 45                                
-                if abs(p_di - m_di) > 10: score += 35                                
+                # Ajustement des scores pour plus de fluidité
+                if adx_val > (28 if category=="CRYPTO" else 22): score += 40                                
+                if abs(p_di - m_di) > 8: score += 35                                
                 score += 20 if h1_ok else 0                                
                 if trend_up and close > highest_20d: score += 10                                
                 if not trend_up and close < lowest_20d: score += 10                                
@@ -213,13 +217,13 @@ def run_engine():
                     score += h1_breakout_bonus                                
                                 
                 score = max(score, 0)                                
-                score_min = 70                                
+                score_min = 65 # Baissé à 65 pour augmenter le volume sans perdre la logique EMA/ADX                                
               
                 if score >= 90:              
                     reliability = "🟥 Exceptionnelle"              
                 elif score >= 80:              
                     reliability = "🟣 Très forte"              
-                elif score >= 70:              
+                elif score >= 65:              
                     reliability = "🟢 Solide"              
                 else:              
                     reliability = "-"              
@@ -228,13 +232,13 @@ def run_engine():
                 rr = 0                                
                                 
                 if score >= score_min and not blocked:                                
-                    if trend_up and breakout_up:                                
+                    if trend_up and (breakout_up or (adx_val > 20 and p_di > m_di)):                                
                         signal = "ACHAT 🚀"                                
-                        sl = max(close - atr_h4*2, lowest_20d)                                
+                        sl = max(close - atr_h4*1.5, lowest_20d)                                
                         tp = min(close + (close-sl)*2.1, highest_20d)                                
-                    elif not trend_up and breakout_dn:                                
+                    elif not trend_up and (breakout_dn or (adx_val > 20 and m_di > p_di)):                                
                         signal = "VENTE 🔻"                                
-                        sl = min(close + atr_h4*2, highest_20d)                                
+                        sl = min(close + atr_h4*1.5, highest_20d)                                
                         tp = max(close - (sl-close)*2.1, lowest_20d)                                
                                 
                 if sl and tp:                                
@@ -247,7 +251,8 @@ def run_engine():
                     reward = abs(tp - close) - spread                                
                     rr = reward / risk if risk > 0 else 0                                
                                 
-                    if rr < 1.4:                                
+                    # RR seuil à 1.2 au lieu de 1.4 pour plus d'opportunités en swing court
+                    if rr < 1.2:                                
                         signal = "ATTENDRE"                                
                         comment = "RR réel IG insuffisant après spread"                                
                                 
@@ -279,7 +284,7 @@ def run_engine():
                                 
                 if signal != "ATTENDRE" and st.session_state["previous_signals"].get(name) != signal:                                
                     send_telegram_msg(                                
-                        f"🦅 SIGNAL SNIPER V16.4\n{name} | {signal}\nFiabilité: {reliability} | Score: {score}%\nRR: {round(rr,2)}\nPrix: {close}\nSL: {sl}\nTP: {tp}\nCommentaire: {comment}"                
+                        f"🦅 SIGNAL SNIPER V16.4.1\n{name} | {signal}\nFiabilité: {reliability} | Score: {score}%\nRR: {round(rr,2)}\nPrix: {close}\nSL: {sl}\nTP: {tp}\nCommentaire: {comment}"                
                     )                                
                                 
             except:                                
@@ -291,8 +296,8 @@ def run_engine():
 # ─────────────────────────────────────────────                                
 # AFFICHAGE                                
 # ─────────────────────────────────────────────                                
-st.title("🦅 Sniper V16.4 — Swing Forex + BTC PRO")                                
-st.info("Version Optimisée : Buffer 0.30xATR | Détection Supports/Résistances 20j | Filtrage RR Dynamique")                                
+st.title("🦅 Sniper V16.4.1 — Swing Forex + BTC PRO")                                
+st.info("Version Haute Fréquence : SL ATR 1.5x | Session 08h-20h | ADX H4 > 12 | RR Min 1.2")                                
                                 
 data = run_engine()                                
                                 
@@ -300,4 +305,4 @@ if data:
     df = pd.DataFrame(data)                                
     st.dataframe(df, use_container_width=True)                                
 else:                                
-    st.warning("⏸ Aucun signal (hors horaires ou news actives)")  
+    st.warning("⏸ Aucun signal (hors horaires ou news actives)")
