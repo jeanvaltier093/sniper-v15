@@ -83,8 +83,9 @@ def pip_factor(pair):
 st.set_page_config(page_title="Sniper V16.4.1 — Swing Forex + BTC PRO", layout="wide")                                
 st_autorefresh(interval=180000, key="refresh")                                
     
-if "previous_signals" not in st.session_state:                                
-    st.session_state["previous_signals"] = {}                                
+# Initialisation du suivi des trades pour éviter les doublons avant clôture
+if "active_trades" not in st.session_state:                                
+    st.session_state["active_trades"] = {}                                
     
 # ─────────────────────────────────────────────                                
 # ACTIFS                                
@@ -111,7 +112,6 @@ def run_engine():
     results = []                                
     news_today = get_high_impact_news()                                
     tickers = [t for cat in ASSETS.values() for t in cat]                                
-    new_signals = {}                                
                                 
     data_m15 = yf.download(tickers, period="5d", interval="15m", group_by="ticker", progress=False)                                
     data_h1  = yf.download(tickers, period="21d", interval="1h", group_by="ticker", progress=False)                                
@@ -217,7 +217,7 @@ def run_engine():
                     score += h1_breakout_bonus                                
                                 
                 score = max(score, 0)                                
-                score_min = 65 # Baissé à 65 pour augmenter le volume sans perdre la logique EMA/ADX                                
+                score_min = 65                                
               
                 if score >= 90:              
                     reliability = "🟥 Exceptionnelle"              
@@ -251,11 +251,23 @@ def run_engine():
                     reward = abs(tp - close) - spread                                
                     rr = reward / risk if risk > 0 else 0                                
                                 
-                    # RR seuil à 1.2 au lieu de 1.4 pour plus d'opportunités en swing court
                     if rr < 1.2:                                
                         signal = "ATTENDRE"                                
                         comment = "RR réel IG insuffisant après spread"                                
                                 
+                # Logique de gestion de position active pour éviter les doublons
+                if name in st.session_state["active_trades"]:
+                    trade = st.session_state["active_trades"][name]
+                    # Vérifier si le TP ou SL a été touché (Clôture du trade)
+                    if (trade["type"] == "ACHAT 🚀" and (close >= trade["tp"] or close <= trade["sl"])) or \
+                       (trade["type"] == "VENTE 🔻" and (close <= trade["tp"] or close >= trade["sl"])):
+                        del st.session_state["active_trades"][name]
+                    else:
+                        # Trade toujours en cours, on bloque le signal Telegram mais on affiche l'état
+                        if signal != "ATTENDRE":
+                            signal = "EN COURS ⏳"
+                            comment = f"Trade déjà actif (TP: {trade['tp']} / SL: {trade['sl']})"
+                
                 if signal == "ATTENDRE" and comment == "-":                                
                     if score >= score_min:                                
                         comment = "Setup valide mais breakout non confirmé"                                
@@ -280,9 +292,9 @@ def run_engine():
                     "Commentaire": comment                                
                 })                                
                                 
-                new_signals[name] = signal                                
-                                
-                if signal != "ATTENDRE" and st.session_state["previous_signals"].get(name) != signal:                                
+                # Envoi Telegram uniquement si nouveau trade et aucune position active
+                if signal in ["ACHAT 🚀", "VENTE 🔻"] and name not in st.session_state["active_trades"]:
+                    st.session_state["active_trades"][name] = {"type": signal, "sl": sl, "tp": tp}
                     send_telegram_msg(                                
                         f"🦅 SIGNAL SNIPER V16.4.1\n{name} | {signal}\nFiabilité: {reliability} | Score: {score}%\nRR: {round(rr,2)}\nPrix: {close}\nSL: {sl}\nTP: {tp}\nCommentaire: {comment}"                
                     )                                
@@ -290,14 +302,13 @@ def run_engine():
             except:                                
                 continue                                
                                 
-    st.session_state["previous_signals"] = new_signals                                
     return results                                
                                 
 # ─────────────────────────────────────────────                                
 # AFFICHAGE                                
 # ─────────────────────────────────────────────                                
 st.title("🦅 Sniper V16.4.1 — Swing Forex + BTC PRO")                                
-st.info("Version Haute Fréquence : SL ATR 1.5x | Session 08h-20h | ADX H4 > 12 | RR Min 1.2")                                
+st.info("Version Haute Fréquence : SL ATR 1.5x | Suivi de Position Actif | RR Min 1.2")                                
                                 
 data = run_engine()                                
                                 
