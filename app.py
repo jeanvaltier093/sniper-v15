@@ -258,12 +258,11 @@ def run_engine():
                         signal = "ATTENDRE"                                
                         comment = "RR réel IG insuffisant après spread"                                
                                 
-                # Logique de gestion de position active pour éviter les doublons
+                # LOGIQUE DE BLOCAGE CRITIQUE : Vérifier si actif avant d'émettre
                 if name in st.session_state["active_trades"]:
                     trade = st.session_state["active_trades"][name]
                     status = "EN COURS"
                     
-                    # Vérifier si TP ou SL touché
                     if trade["type"] == "ACHAT 🚀":
                         if close >= trade["tp"]: status = "GAGNANT ✅"
                         elif close <= trade["sl"]: status = "PERDANT ❌"
@@ -272,7 +271,6 @@ def run_engine():
                         elif close >= trade["sl"]: status = "PERDANT ❌"
                     
                     if status != "EN COURS":
-                        # Archiver dans l'historique
                         st.session_state["trade_history"].append({
                             "Heure": datetime.datetime.now(ZoneInfo("Europe/Paris")).strftime("%H:%M"),
                             "Actif": name,
@@ -283,10 +281,9 @@ def run_engine():
                         })
                         del st.session_state["active_trades"][name]
                     else:
-                        # Trade toujours en cours
-                        if signal != "ATTENDRE":
-                            signal = "EN COURS ⏳"
-                            comment = f"Trade déjà actif (TP: {trade['tp']} / SL: {trade['sl']})"
+                        # LE SIGNAL EST FORCÉ À "EN COURS" POUR BLOQUER TELEGRAM
+                        signal = "EN COURS ⏳"
+                        comment = f"Trade déjà actif (TP: {trade['tp']} / SL: {trade['sl']})"
                 
                 if signal == "ATTENDRE" and comment == "-":                                
                     if score >= score_min:                                
@@ -312,8 +309,8 @@ def run_engine():
                     "Commentaire": comment                                
                 })                                
                                 
-                # Envoi Telegram uniquement si nouveau trade et aucune position active
-                if signal in ["ACHAT 🚀", "VENTE 🔻"] and name not in st.session_state["active_trades"]:
+                # ENVOI TELEGRAM : Uniquement si ACHAT ou VENTE (EN COURS est ignoré)
+                if signal in ["ACHAT 🚀", "VENTE 🔻"]:
                     st.session_state["active_trades"][name] = {
                         "type": signal, 
                         "sl": round(sl, 5), 
