@@ -34,7 +34,7 @@ if st.button("📩 Test Telegram"):
     st.success("Message de test envoyé ! Vérifie ton Telegram.")                                
     
 # ─────────────────────────────────────────────                                
-# FILTRE HORAIRE (PARIS) - OPTIMISÉ POUR 3-4 SIGN AUX/JOUR                              
+# FILTRE HORAIRE (PARIS) - OPTIMISÉ POUR 3-4 SIGN AUX/JOUR                               
 # ─────────────────────────────────────────────                                
 def is_trading_session():                                
     now = datetime.datetime.now(ZoneInfo("Europe/Paris"))                                
@@ -287,7 +287,7 @@ def run_engine():
                 
                 if signal == "ATTENDRE" and comment == "-":                                
                     if score >= score_min:                                
-                        comment = "Setup valide mais breakout non confirmé"                                
+                        comment = "Setup valide mais breakout non confirmed"                                
                     else:                                
                         comment = "Conditions insuffisantes"                                
                                 
@@ -309,8 +309,9 @@ def run_engine():
                     "Commentaire": comment                                
                 })                                
                                 
-                # ENVOI TELEGRAM : Uniquement si ACHAT ou VENTE (EN COURS est ignoré)
+                # ENVOI TELEGRAM : Uniquement si ACHAT ou VENTE (Bloqué si signal == "EN COURS ⏳")
                 if signal in ["ACHAT 🚀", "VENTE 🔻"]:
+                    # On enregistre d'abord pour que le prochain passage voit "EN COURS"
                     st.session_state["active_trades"][name] = {
                         "type": signal, 
                         "sl": round(sl, 5), 
