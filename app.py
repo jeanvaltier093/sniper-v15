@@ -34,7 +34,7 @@ if st.button("📩 Test Telegram"):
     st.success("Message de test envoyé ! Vérifie ton Telegram.")                                
     
 # ─────────────────────────────────────────────                                
-# FILTRE HORAIRE (PARIS) - OPTIMISÉ POUR 3-4 SIGN AUX/JOUR                               
+# FILTRE HORAIRE (PARIS) - OPTIMISÉ POUR 3-4 SIGN AUX/JOUR                                
 # ─────────────────────────────────────────────                                
 def is_trading_session():                                
     now = datetime.datetime.now(ZoneInfo("Europe/Paris"))                                
@@ -135,42 +135,6 @@ def run_engine():
                 df_h1  = data_h1[ticker].dropna()                                
                 df_h4  = data_h4[ticker].dropna()                                
                 df_d1  = data_d1[ticker].dropna()                                
-                
-                close = float(df_m15["Close"].iloc[-1])
-
-                # 🔓 ÉTAPE 0 : VÉRIFICATION DU TRADE EN COURS (AVANT TOUT CALCUL)
-                if name in st.session_state["active_trades"]:
-                    trade = st.session_state["active_trades"][name]
-                    status = "EN COURS"
-                    
-                    if trade["type"] == "ACHAT 🚀":
-                        if close >= trade["tp"]: status = "GAGNANT ✅"
-                        elif close <= trade["sl"]: status = "PERDANT ❌"
-                    elif trade["type"] == "VENTE 🔻":
-                        if close <= trade["tp"]: status = "GAGNANT ✅"
-                        elif close >= trade["sl"]: status = "PERDANT ❌"
-                    
-                    if status != "EN COURS":
-                        st.session_state["trade_history"].append({
-                            "Heure": datetime.datetime.now(ZoneInfo("Europe/Paris")).strftime("%H:%M"),
-                            "Actif": name,
-                            "Direction": trade["type"],
-                            "Résultat": status,
-                            "Prix Entrée": trade["entry"],
-                            "Prix Sortie": round(close, 5)
-                        })
-                        del st.session_state["active_trades"][name]
-                        if name in st.session_state["sent_signals"]:
-                            st.session_state["sent_signals"].remove(name)
-                    else:
-                        # LE TRADE EST TOUJOURS ACTIF -> ON ARRÊTE TOUT POUR CET ACTIF ICI
-                        results.append({
-                            "Actif": name, "Catégorie": category, "Signal": "EN COURS ⏳",
-                            "Fiabilité": "-", "Score": "-", "Prix": round(close, 5),
-                            "SL Prix": trade["sl"], "SL Pips": "-", "TP Prix": trade["tp"],
-                            "TP Pips": "-", "Commentaire": f"Trade actif (TP: {trade['tp']})"
-                        })
-                        continue # PASSE À L'ACTIF SUIVANT : IMPOSSIBLE D'ENVOYER TELEGRAM
               
                 news_block = False              
                 session_block = False              
@@ -183,6 +147,7 @@ def run_engine():
                     comment = "Hors session" if comment == "-" else comment + " + Hors session"                                
                     session_block = True              
                                 
+                close = float(df_m15["Close"].iloc[-1])                                
                 high  = float(df_m15["High"].iloc[-1])                                
                 low   = float(df_m15["Low"].iloc[-1])                                
                                 
@@ -296,6 +261,38 @@ def run_engine():
                     if rr < 1.2:                                
                         signal = "ATTENDRE"                                
                         comment = "RR réel IG insuffisant après spread"                                
+                                
+                # LOGIQUE DE BLOCAGE CRITIQUE : Vérifier si actif avant d'émettre
+                already_in_trade = name in st.session_state["active_trades"]
+
+                if already_in_trade:
+                    trade = st.session_state["active_trades"][name]
+                    status = "EN COURS"
+                    
+                    if trade["type"] == "ACHAT 🚀":
+                        if close >= trade["tp"]: status = "GAGNANT ✅"
+                        elif close <= trade["sl"]: status = "PERDANT ❌"
+                    elif trade["type"] == "VENTE 🔻":
+                        if close <= trade["tp"]: status = "GAGNANT ✅"
+                        elif close >= trade["sl"]: status = "PERDANT ❌"
+                    
+                    if status != "EN COURS":
+                        st.session_state["trade_history"].append({
+                            "Heure": datetime.datetime.now(ZoneInfo("Europe/Paris")).strftime("%H:%M"),
+                            "Actif": name,
+                            "Direction": trade["type"],
+                            "Résultat": status,
+                            "Prix Entrée": trade["entry"],
+                            "Prix Sortie": round(close, 5)
+                        })
+                        # Libération des verrous lors de la clôture
+                        del st.session_state["active_trades"][name]
+                        if name in st.session_state["sent_signals"]:
+                            st.session_state["sent_signals"].remove(name)
+                        already_in_trade = False
+                    else:
+                        signal = "EN COURS ⏳"
+                        comment = f"Trade déjà actif (TP: {trade['tp']} / SL: {trade['sl']})"
                 
                 if signal == "ATTENDRE" and comment == "-":                                
                     if score >= score_min:                                
@@ -308,19 +305,32 @@ def run_engine():
                 tp_pips = abs(tp-close)*factor if tp else "-"                                
                                 
                 results.append({                                
-                    "Actif": name, "Catégorie": category, "Signal": signal, "Fiabilité": reliability,                                
-                    "Score": f"{score}%", "Prix": round(close,2 if category=="CRYPTO" else 5),                                
+                    "Actif": name,                                
+                    "Catégorie": category,                                
+                    "Signal": signal,                                
+                    "Fiabilité": reliability,                                
+                    "Score": f"{score}%",                                
+                    "Prix": round(close,2 if category=="CRYPTO" else 5),                                
                     "SL Prix": round(sl,2 if category=="CRYPTO" else 5) if sl else "-",                                
                     "SL Pips": round(sl_pips,1) if sl else "-",                                
                     "TP Prix": round(tp,2 if category=="CRYPTO" else 5) if tp else "-",                                
-                    "TP Pips": round(tp_pips,1) if tp else "-", "Commentaire": comment                                
+                    "TP Pips": round(tp_pips,1) if tp else "-",                                
+                    "Commentaire": comment                                
                 })                                
                                 
-                # ENVOI TELEGRAM : Sécurité renforcée avec verrouillage immédiat
-                if signal in ["ACHAT 🚀", "VENTE 🔻"] and name not in st.session_state["sent_signals"]:
+                # ENVOI TELEGRAM : Correction avec triple sécurité (Signal + Sent + Active)
+                if (
+                    signal in ["ACHAT 🚀", "VENTE 🔻"] 
+                    and name not in st.session_state["sent_signals"]
+                    and name not in st.session_state["active_trades"]
+                ):
+                    # Verrouillage immédiat
                     st.session_state["sent_signals"].add(name)
                     st.session_state["active_trades"][name] = {
-                        "type": signal, "sl": round(sl, 5), "tp": round(tp, 5), "entry": round(close, 5)
+                        "type": signal, 
+                        "sl": round(sl, 5), 
+                        "tp": round(tp, 5),
+                        "entry": round(close, 5)
                     }
                     send_telegram_msg(                                
                         f"🦅 SIGNAL SNIPER V16.4.1\n{name} | {signal}\nFiabilité: {reliability} | Score: {score}%\nRR: {round(rr,2)}\nPrix: {close}\nSL: {sl}\nTP: {tp}\nCommentaire: {comment}"                
