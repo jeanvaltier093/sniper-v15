@@ -129,6 +129,30 @@ def run_engine():
         for ticker in symbols:                                
             try:                                
                 name = ticker.replace("=X","").replace("-USD","USD")                                
+
+                # 🔒 BLOC CHATGPT : Si actif déjà en trade, on ignore l'émission d'un nouveau signal
+                if name in st.session_state["active_trades"]:
+                    trade = st.session_state["active_trades"][name]
+                    df_m15 = data_m15[ticker].dropna()
+                    current_price = round(float(df_m15["Close"].iloc[-1]), 5)
+                    signal = "EN COURS ⏳"
+                    comment = f"Trade déjà actif (TP: {trade['tp']} / SL: {trade['sl']})"
+                    
+                    results.append({
+                        "Actif": name,
+                        "Catégorie": category,
+                        "Signal": signal,
+                        "Fiabilité": "-",
+                        "Score": "-",
+                        "Prix": current_price,
+                        "SL Prix": trade["sl"],
+                        "SL Pips": round(abs(trade["entry"]-trade["sl"])*pip_factor(name),1),
+                        "TP Prix": trade["tp"],
+                        "TP Pips": round(abs(trade["tp"]-trade["entry"])*pip_factor(name),1),
+                        "Commentaire": comment
+                    })
+                    continue  # passe au ticker suivant sans recalcul
+
                 comment = "-"                                
                                 
                 df_m15 = data_m15[ticker].dropna()                                
@@ -261,38 +285,6 @@ def run_engine():
                     if rr < 1.2:                                
                         signal = "ATTENDRE"                                
                         comment = "RR réel IG insuffisant après spread"                                
-                                
-                # LOGIQUE DE BLOCAGE CRITIQUE : Vérifier si actif avant d'émettre
-                already_in_trade = name in st.session_state["active_trades"]
-
-                if already_in_trade:
-                    trade = st.session_state["active_trades"][name]
-                    status = "EN COURS"
-                    
-                    if trade["type"] == "ACHAT 🚀":
-                        if close >= trade["tp"]: status = "GAGNANT ✅"
-                        elif close <= trade["sl"]: status = "PERDANT ❌"
-                    elif trade["type"] == "VENTE 🔻":
-                        if close <= trade["tp"]: status = "GAGNANT ✅"
-                        elif close >= trade["sl"]: status = "PERDANT ❌"
-                    
-                    if status != "EN COURS":
-                        st.session_state["trade_history"].append({
-                            "Heure": datetime.datetime.now(ZoneInfo("Europe/Paris")).strftime("%H:%M"),
-                            "Actif": name,
-                            "Direction": trade["type"],
-                            "Résultat": status,
-                            "Prix Entrée": trade["entry"],
-                            "Prix Sortie": round(close, 5)
-                        })
-                        # Libération des verrous lors de la clôture
-                        del st.session_state["active_trades"][name]
-                        if name in st.session_state["sent_signals"]:
-                            st.session_state["sent_signals"].remove(name)
-                        already_in_trade = False
-                    else:
-                        signal = "EN COURS ⏳"
-                        comment = f"Trade déjà actif (TP: {trade['tp']} / SL: {trade['sl']})"
                 
                 if signal == "ATTENDRE" and comment == "-":                                
                     if score >= score_min:                                
@@ -318,14 +310,12 @@ def run_engine():
                     "Commentaire": comment                                
                 })                                
                                 
-                # ENVOI TELEGRAM : Correction avec triple sécurité (Signal + Sent + Active)
+                # ENVOI TELEGRAM : Sécurité active_trades
                 if (
                     signal in ["ACHAT 🚀", "VENTE 🔻"] 
-                    and name not in st.session_state["sent_signals"]
                     and name not in st.session_state["active_trades"]
                 ):
                     # Verrouillage immédiat
-                    st.session_state["sent_signals"].add(name)
                     st.session_state["active_trades"][name] = {
                         "type": signal, 
                         "sl": round(sl, 5), 
