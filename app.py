@@ -1,5 +1,4 @@
 import streamlit as st                                
-import pd as pd                                
 import pandas as pd                                
 import yfinance as yf                                
 import requests                                
@@ -295,7 +294,7 @@ def run_engine():
                     "Commentaire": comment                                
                 })                                
                                 
-                # SAUVEGARDE ET ENVOI FILTRÉ (SCORE >= 75)
+                # SAUVEGARDE DU TRADE ET ENVOI TÉLÉGRAM FILTRÉ
                 if signal in ["ACHAT 🚀", "VENTE 🔻"] and name not in active_trades:
                     active_trades[name] = {
                         "type": signal, "sl": round(sl, 5), "tp": round(tp, 5), "entry": round(close, 5), "rr": round(rr, 2)
@@ -321,14 +320,17 @@ st.title("🦅 Sniper V16.4.1 — Swing Forex + BTC PRO")
 if history_trades:
     st.header("📊 Historique de Performance")
     df_hist = pd.DataFrame(history_trades)
+    
     col1, col2, col3 = st.columns(3)
     win_count = len(df_hist[df_hist["Résultat"] == "✅ WIN"])
     total_trades = len(df_hist)
     winrate = (win_count / total_trades * 100) if total_trades > 0 else 0
     total_rr = df_hist["RR"].sum()
+    
     col1.metric("Winrate", f"{round(winrate, 1)}%")
     col2.metric("Trades Clôturés", total_trades)
     col3.metric("Gain Cumulé (RR)", f"{round(total_rr, 2)} R")
+    
     with st.expander("Voir le détail des trades clôturés"):
         st.table(df_hist.tail(10))
 
@@ -337,12 +339,9 @@ st.header("🎯 Signaux en Direct")
 data = run_engine()                                
 if data:                                
     st.dataframe(pd.DataFrame(data), use_container_width=True)                                
-else:                                
-    st.warning("⏸ Aucun signal détecté actuellement.")
 
 # Contrôles
 with st.sidebar:
-    st.subheader("Paramètres")
     if st.button("🗑 Réinitialiser Verrous"):
         if os.path.exists(DB_FILE): os.remove(DB_FILE)
         st.success("Verrous supprimés.")
