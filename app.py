@@ -259,7 +259,9 @@ def run_engine():
                         comment = "RR réel IG insuffisant après spread"                                
                                 
                 # LOGIQUE DE BLOCAGE CRITIQUE : Vérifier si actif avant d'émettre
-                if name in st.session_state["active_trades"]:
+                already_in_trade = name in st.session_state["active_trades"]
+
+                if already_in_trade:
                     trade = st.session_state["active_trades"][name]
                     status = "EN COURS"
                     
@@ -280,8 +282,8 @@ def run_engine():
                             "Prix Sortie": round(close, 5)
                         })
                         del st.session_state["active_trades"][name]
+                        already_in_trade = False # On vient de sortir, on autorise un nouveau signal
                     else:
-                        # LE SIGNAL EST FORCÉ À "EN COURS" POUR BLOQUER TELEGRAM
                         signal = "EN COURS ⏳"
                         comment = f"Trade déjà actif (TP: {trade['tp']} / SL: {trade['sl']})"
                 
@@ -309,9 +311,9 @@ def run_engine():
                     "Commentaire": comment                                
                 })                                
                                 
-                # ENVOI TELEGRAM : Uniquement si ACHAT ou VENTE (Bloqué si signal == "EN COURS ⏳")
-                if signal in ["ACHAT 🚀", "VENTE 🔻"]:
-                    # On enregistre d'abord pour que le prochain passage voit "EN COURS"
+                # ENVOI TELEGRAM : Sécurité renforcée avec double vérification already_in_trade
+                if signal in ["ACHAT 🚀", "VENTE 🔻"] and not already_in_trade:
+                    # Enregistrement immédiat dans la session AVANT l'envoi
                     st.session_state["active_trades"][name] = {
                         "type": signal, 
                         "sl": round(sl, 5), 
