@@ -1,4 +1,5 @@
 import streamlit as st                                
+import pd as pd                                
 import pandas as pd                                
 import yfinance as yf                                
 import requests                                
@@ -157,9 +158,7 @@ def run_engine():
                         elif current_price >= trade["sl"]: is_loss = True
                     
                     if is_win or is_loss:
-                        # Calcul du Gain RR (Simplifié : on gagne le RR prévu ou on perd 1R)
                         gain_rr = trade["rr"] if is_win else -1.0
-                        
                         history_trades.append({
                             "Date": datetime.datetime.now().strftime("%d/%m %H:%M"),
                             "Actif": name,
@@ -168,7 +167,6 @@ def run_engine():
                             "RR": round(gain_rr, 2)
                         })
                         save_json(HISTORY_FILE, history_trades)
-                        
                         del active_trades[name]
                         save_json(DB_FILE, active_trades)
                     else:
@@ -297,16 +295,21 @@ def run_engine():
                     "Commentaire": comment                                
                 })                                
                                 
+                # SAUVEGARDE ET ENVOI FILTRÉ (SCORE >= 75)
                 if signal in ["ACHAT 🚀", "VENTE 🔻"] and name not in active_trades:
                     active_trades[name] = {
                         "type": signal, "sl": round(sl, 5), "tp": round(tp, 5), "entry": round(close, 5), "rr": round(rr, 2)
                     }
                     save_json(DB_FILE, active_trades)
                     
-                    send_telegram_msg(                                
-                        f"🦅 SIGNAL SNIPER V16.4.1\n{name} | {signal}\nFiabilité: {reliability} | Score: {score}%\nRR: {round(rr,2)}\nPrix: {close}\nSL: {sl}\nTP: {tp}"                
-                    )                                
+                    # CONDITION TELEGRAM : Uniquement si Score >= 75
+                    if score >= 75:
+                        send_telegram_msg(                                
+                            f"🦅 SIGNAL SNIPER V16.4.1\n{name} | {signal}\nFiabilité: {reliability} | Score: {score}%\nRR: {round(rr,2)}\nPrix: {close}\nSL: {sl}\nTP: {tp}"                
+                        )                                
+                                
             except: continue                                
+                                
     return results                                
                                 
 # ─────────────────────────────────────────────                                
@@ -318,17 +321,14 @@ st.title("🦅 Sniper V16.4.1 — Swing Forex + BTC PRO")
 if history_trades:
     st.header("📊 Historique de Performance")
     df_hist = pd.DataFrame(history_trades)
-    
     col1, col2, col3 = st.columns(3)
     win_count = len(df_hist[df_hist["Résultat"] == "✅ WIN"])
     total_trades = len(df_hist)
     winrate = (win_count / total_trades * 100) if total_trades > 0 else 0
     total_rr = df_hist["RR"].sum()
-    
     col1.metric("Winrate", f"{round(winrate, 1)}%")
     col2.metric("Trades Clôturés", total_trades)
     col3.metric("Gain Cumulé (RR)", f"{round(total_rr, 2)} R")
-    
     with st.expander("Voir le détail des trades clôturés"):
         st.table(df_hist.tail(10))
 
@@ -337,9 +337,12 @@ st.header("🎯 Signaux en Direct")
 data = run_engine()                                
 if data:                                
     st.dataframe(pd.DataFrame(data), use_container_width=True)                                
+else:                                
+    st.warning("⏸ Aucun signal détecté actuellement.")
 
 # Contrôles
 with st.sidebar:
+    st.subheader("Paramètres")
     if st.button("🗑 Réinitialiser Verrous"):
         if os.path.exists(DB_FILE): os.remove(DB_FILE)
         st.success("Verrous supprimés.")
