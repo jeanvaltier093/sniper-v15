@@ -11,21 +11,22 @@ import os
 from zoneinfo import ZoneInfo                                
     
 # ─────────────────────────────────────────────                                
-# PERSISTANCE : GESTION DU FICHIER JSON (Empêche le spam après refresh)
+# PERSISTANCE : GESTION DES FICHIERS JSON
 # ─────────────────────────────────────────────                                
 DB_FILE = "active_trades_db.json"
+HISTORY_FILE = "trade_history_db.json"
 
-def load_persistent_trades():
-    if os.path.exists(DB_FILE):
+def load_json(file):
+    if os.path.exists(file):
         try:
-            with open(DB_FILE, "r") as f:
+            with open(file, "r") as f:
                 return json.load(f)
-        except: return {}
-    return {}
+        except: return {} if file == DB_FILE else []
+    return {} if file == DB_FILE else []
 
-def save_persistent_trades(trades):
-    with open(DB_FILE, "w") as f:
-        json.dump(trades, f)
+def save_json(file, data):
+    with open(file, "w") as f:
+        json.dump(data, f)
 
 # ─────────────────────────────────────────────                                
 # CONFIG TELEGRAM (SECRET VIA STREAMLIT)                                
@@ -53,7 +54,7 @@ if st.button("📩 Test Telegram"):
     st.success("Message de test envoyé ! Vérifie ton Telegram.")                                
     
 # ─────────────────────────────────────────────                                
-# FILTRE HORAIRE (PARIS) - OPTIMISÉ POUR 3-4 SIGN AUX/JOUR                                
+# FILTRE HORAIRE (PARIS)                                
 # ─────────────────────────────────────────────                                
 def is_trading_session():                                
     now = datetime.datetime.now(ZoneInfo("Europe/Paris"))                                
@@ -61,7 +62,7 @@ def is_trading_session():
     return 8 <= hour < 20                                
     
 # ─────────────────────────────────────────────                                
-# FILTRE NEWS HIGH IMPACT (ECONDB)                                
+# FILTRE NEWS HIGH IMPACT                                
 # ─────────────────────────────────────────────                                
 def get_high_impact_news():                                
     try:                                
@@ -87,7 +88,7 @@ def is_news_block(pair, news):
     return False                                
     
 # ─────────────────────────────────────────────                                
-# PIP FACTOR (FOREX EXACT)                                
+# PIP FACTOR                                
 # ─────────────────────────────────────────────                                
 def pip_factor(pair):                                
     if "BTC" in pair:                                
@@ -100,11 +101,9 @@ def pip_factor(pair):
 st.set_page_config(page_title="Sniper V16.4.1 — Swing Forex + BTC PRO", layout="wide")                                
 st_autorefresh(interval=180000, key="refresh")                                
     
-# Chargement des trades actifs (depuis le fichier persistant au lieu du session_state)
-active_trades = load_persistent_trades()
-
-if "trade_history" not in st.session_state:
-    st.session_state["trade_history"] = []
+# Chargement des données persistantes
+active_trades = load_json(DB_FILE)
+history_trades = load_json(HISTORY_FILE)
     
 # ─────────────────────────────────────────────                                
 # ACTIFS                                
@@ -141,21 +140,37 @@ def run_engine():
             try:                                
                 name = ticker.replace("=X","").replace("-USD","USD")                                
 
-                # 🔒 VERROU PERSISTANT : Utilise le dictionnaire chargé depuis le JSON
+                # 🔒 GESTION DU VERROU ET DE L'HISTORIQUE
                 if name in active_trades:
                     trade = active_trades[name]
                     df_m15 = data_m15[ticker].dropna()
                     current_price = round(float(df_m15["Close"].iloc[-1]), 5)
                     
-                    # Logique de sortie pour libérer le verrou si TP/SL touché
-                    is_closed = False
-                    if trade["type"] == "ACHAT 🚀" and (current_price >= trade["tp"] or current_price <= trade["sl"]): is_closed = True
-                    if trade["type"] == "VENTE 🔻" and (current_price <= trade["tp"] or current_price >= trade["sl"]): is_closed = True
+                    is_win = False
+                    is_loss = False
                     
-                    if is_closed:
+                    if trade["type"] == "ACHAT 🚀":
+                        if current_price >= trade["tp"]: is_win = True
+                        elif current_price <= trade["sl"]: is_loss = True
+                    else: # VENTE
+                        if current_price <= trade["tp"]: is_win = True
+                        elif current_price >= trade["sl"]: is_loss = True
+                    
+                    if is_win or is_loss:
+                        # Calcul du Gain RR (Simplifié : on gagne le RR prévu ou on perd 1R)
+                        gain_rr = trade["rr"] if is_win else -1.0
+                        
+                        history_trades.append({
+                            "Date": datetime.datetime.now().strftime("%d/%m %H:%M"),
+                            "Actif": name,
+                            "Type": trade["type"],
+                            "Résultat": "✅ WIN" if is_win else "❌ LOSS",
+                            "RR": round(gain_rr, 2)
+                        })
+                        save_json(HISTORY_FILE, history_trades)
+                        
                         del active_trades[name]
-                        save_persistent_trades(active_trades)
-                        # On ne fait pas de 'continue' ici pour permettre de détecter un nouveau signal au tour suivant
+                        save_json(DB_FILE, active_trades)
                     else:
                         results.append({
                             "Actif": name, "Catégorie": category, "Signal": "EN COURS ⏳",
@@ -164,7 +179,7 @@ def run_engine():
                             "TP Prix": trade["tp"], "TP Pips": round(abs(trade["tp"]-trade["entry"])*pip_factor(name),1),
                             "Commentaire": f"Trade déjà actif (Entrée: {trade['entry']})"
                         })
-                        continue  # BLOQUE LE RECALCUL ET L'ENVOI TELEGRAM
+                        continue
 
                 comment = "-"                                
                                 
@@ -213,13 +228,6 @@ def run_engine():
                                 
                 breakout_up = breakout_up_close or breakout_up_wick                                
                 breakout_dn = breakout_dn_close or breakout_dn_wick                                
-                                
-                h1_breakout_bonus = 0                                
-                if category == "FOREX":                                
-                    box_high_h1 = df_h1["High"].iloc[-21:-1].max()                                
-                    box_low_h1 = df_h1["Low"].iloc[-21:-1].min()                                
-                    if close > box_high_h1 or close < box_low_h1:                                
-                        h1_breakout_bonus = 15                                
                                 
                 adx_m = ADXIndicator(df_m15["High"], df_m15["Low"], df_m15["Close"])                                
                 adx_val = adx_m.adx().iloc[-1]                                
@@ -289,38 +297,52 @@ def run_engine():
                     "Commentaire": comment                                
                 })                                
                                 
-                # ENVOI TELEGRAM + SAUVEGARDE PERSISTANTE
                 if signal in ["ACHAT 🚀", "VENTE 🔻"] and name not in active_trades:
-                    # Enregistrement dans le fichier JSON avant l'envoi
                     active_trades[name] = {
-                        "type": signal, "sl": round(sl, 5), "tp": round(tp, 5), "entry": round(close, 5)
+                        "type": signal, "sl": round(sl, 5), "tp": round(tp, 5), "entry": round(close, 5), "rr": round(rr, 2)
                     }
-                    save_persistent_trades(active_trades)
+                    save_json(DB_FILE, active_trades)
                     
                     send_telegram_msg(                                
-                        f"🦅 SIGNAL SNIPER V16.4.1\n{name} | {signal}\nFiabilité: {reliability} | Score: {score}%\nRR: {round(rr,2)}\nPrix: {close}\nSL: {sl}\nTP: {tp}\nCommentaire: {comment}"                
+                        f"🦅 SIGNAL SNIPER V16.4.1\n{name} | {signal}\nFiabilité: {reliability} | Score: {score}%\nRR: {round(rr,2)}\nPrix: {close}\nSL: {sl}\nTP: {tp}"                
                     )                                
-                                
-            except:                                
-                continue                                
-                                
+            except: continue                                
     return results                                
                                 
 # ─────────────────────────────────────────────                                
-# AFFICHAGE                                
+# AFFICHAGE STREAMLIT                                
 # ─────────────────────────────────────────────                                
 st.title("🦅 Sniper V16.4.1 — Swing Forex + BTC PRO")                                
-st.info("Sécurité Anti-Spam activée : Sauvegarde sur disque JSON pour les trades actifs.")                                
-                                
+
+# Section Stats Historiques
+if history_trades:
+    st.header("📊 Historique de Performance")
+    df_hist = pd.DataFrame(history_trades)
+    
+    col1, col2, col3 = st.columns(3)
+    win_count = len(df_hist[df_hist["Résultat"] == "✅ WIN"])
+    total_trades = len(df_hist)
+    winrate = (win_count / total_trades * 100) if total_trades > 0 else 0
+    total_rr = df_hist["RR"].sum()
+    
+    col1.metric("Winrate", f"{round(winrate, 1)}%")
+    col2.metric("Trades Clôturés", total_trades)
+    col3.metric("Gain Cumulé (RR)", f"{round(total_rr, 2)} R")
+    
+    with st.expander("Voir le détail des trades clôturés"):
+        st.table(df_hist.tail(10))
+
+# Signaux en cours
+st.header("🎯 Signaux en Direct")
 data = run_engine()                                
-                                
 if data:                                
     st.dataframe(pd.DataFrame(data), use_container_width=True)                                
-else:                                
-    st.warning("⏸ Aucun signal (hors horaires ou news actives)")
 
-# Historique (Vider si besoin de réinitialiser)
-if st.button("🗑 Réinitialiser le verrou (Stop Spam)"):
-    if os.path.exists(DB_FILE):
-        os.remove(DB_FILE)
-        st.success("Verrous supprimés. Le prochain signal sera renvoyé.")
+# Contrôles
+with st.sidebar:
+    if st.button("🗑 Réinitialiser Verrous"):
+        if os.path.exists(DB_FILE): os.remove(DB_FILE)
+        st.success("Verrous supprimés.")
+    if st.button("🔴 Effacer Historique"):
+        if os.path.exists(HISTORY_FILE): os.remove(HISTORY_FILE)
+        st.success("Historique vidé.")
