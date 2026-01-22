@@ -87,6 +87,10 @@ st_autorefresh(interval=180000, key="refresh")
 if "active_trades" not in st.session_state:                                
     st.session_state["active_trades"] = {}                                
 
+# Initialisation du verrou Telegram spécifique
+if "sent_signals" not in st.session_state:
+    st.session_state["sent_signals"] = set()
+
 # Initialisation de l'historique des signaux
 if "trade_history" not in st.session_state:
     st.session_state["trade_history"] = []
@@ -281,8 +285,11 @@ def run_engine():
                             "Prix Entrée": trade["entry"],
                             "Prix Sortie": round(close, 5)
                         })
+                        # Libération des verrous lors de la clôture
                         del st.session_state["active_trades"][name]
-                        already_in_trade = False # On vient de sortir, on autorise un nouveau signal
+                        if name in st.session_state["sent_signals"]:
+                            st.session_state["sent_signals"].remove(name)
+                        already_in_trade = False
                     else:
                         signal = "EN COURS ⏳"
                         comment = f"Trade déjà actif (TP: {trade['tp']} / SL: {trade['sl']})"
@@ -311,9 +318,10 @@ def run_engine():
                     "Commentaire": comment                                
                 })                                
                                 
-                # ENVOI TELEGRAM : Sécurité renforcée avec double vérification already_in_trade
-                if signal in ["ACHAT 🚀", "VENTE 🔻"] and not already_in_trade:
-                    # Enregistrement immédiat dans la session AVANT l'envoi
+                # ENVOI TELEGRAM : Triple sécurité avec "sent_signals"
+                if signal in ["ACHAT 🚀", "VENTE 🔻"] and name not in st.session_state["sent_signals"]:
+                    # Verrouillage immédiat
+                    st.session_state["sent_signals"].add(name)
                     st.session_state["active_trades"][name] = {
                         "type": signal, 
                         "sl": round(sl, 5), 
