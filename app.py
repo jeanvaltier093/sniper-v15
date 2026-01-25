@@ -54,11 +54,24 @@ if st.button("📩 Test Telegram"):
     st.success("Message de test envoyé ! Vérifie ton Telegram.")                                
     
 # ─────────────────────────────────────────────                                
-# FILTRE HORAIRE (PARIS)                                
+# FILTRE HORAIRE ET JOURS (PARIS)                                
 # ─────────────────────────────────────────────                                
-def is_trading_session():                                
+def is_trading_session(category):
+    # La Crypto n'a pas de restriction de session
+    if category == "CRYPTO":
+        return True
+        
     now = datetime.datetime.now(ZoneInfo("Europe/Paris"))                                
+    weekday = now.weekday()  # 0=Lundi, 5=Samedi, 6=Dimanche
     hour = now.hour                                
+    
+    # Blocage total le Samedi
+    if weekday == 5: 
+        return False
+    # Blocage le Dimanche (Sauf après 22h pour l'ouverture Asie si tu veux, sinon False tout le dimanche)
+    if weekday == 6:
+        return False
+    # En semaine : 8h à 20h
     return 8 <= hour < 20                                
     
 # ─────────────────────────────────────────────                                
@@ -192,8 +205,8 @@ def run_engine():
                     comment = "News high impact"                                
                     news_block = True              
                                 
-                if category == "FOREX" and not is_trading_session():                                
-                    comment = "Hors session" if comment == "-" else comment + " + Hors session"                                
+                if not is_trading_session(category):                                
+                    comment = "Hors session / Week-end" if comment == "-" else comment + " + Hors session"                                
                     session_block = True              
                                 
                 close = float(df_m15["Close"].iloc[-1])                                
@@ -268,7 +281,7 @@ def run_engine():
                     elif not trend_up and (breakout_dn or (adx_val > 20 and m_di > p_di)):                                
                         signal = "VENTE 🔻"                                
                         sl = min(close + atr_h4*1.5, highest_20d)                                
-                        tp = max(close - (sl-close)*2.1, lowest_20d)                                
+                        tp = max(close - (sl-close)*2.1, lowest_20d)
                                 
                 if sl and tp:                                
                     spread = 0.00012 if "JPY" not in name else 0.0016 if category == "FOREX" else close * 0.0005                                
@@ -296,16 +309,29 @@ def run_engine():
                                 
                 # SAUVEGARDE DU TRADE ET ENVOI TÉLÉGRAM FILTRÉ
                 if signal in ["ACHAT 🚀", "VENTE 🔻"] and name not in active_trades:
-                    active_trades[name] = {
-                        "type": signal, "sl": round(sl, 5), "tp": round(tp, 5), "entry": round(close, 5), "rr": round(rr, 2)
-                    }
-                    save_json(DB_FILE, active_trades)
+                    # --- LOGIQUE DE NON-DUPLICATION PAR DEVISE ---
+                    currency_1 = name[:3]
+                    currency_2 = name[3:6]
+                    duplicate_found = False
+                    for active_name in active_trades.keys():
+                        if currency_1 in active_name or currency_2 in active_name:
+                            duplicate_found = True
+                            break
                     
-                    # CONDITION TELEGRAM : Uniquement si Score >= 75
-                    if score >= 75:
-                        send_telegram_msg(                                
-                            f"🦅 SIGNAL SNIPER V16.4.1\n{name} | {signal}\nFiabilité: {reliability} | Score: {score}%\nRR: {round(rr,2)}\nPrix: {close}\nSL: {sl}\nTP: {tp}"                
-                        )                                
+                    if not duplicate_found:
+                        active_trades[name] = {
+                            "type": signal, "sl": round(sl, 5), "tp": round(tp, 5), "entry": round(close, 5), "rr": round(rr, 2)
+                        }
+                        save_json(DB_FILE, active_trades)
+                        
+                        # CONDITION TELEGRAM : Uniquement si Score >= 75
+                        if score >= 75:
+                            send_telegram_msg(                                
+                                f"🦅 SIGNAL SNIPER V16.4.1\n{name} | {signal}\nFiabilité: {reliability} | Score: {score}%\nRR: {round(rr,2)}\nPrix: {close}\nSL: {sl}\nTP: {tp}"                
+                            )                                
+                    else:
+                        # On met à jour le dernier résultat pour informer l'utilisateur
+                        results[-1]["Commentaire"] = "Signal ignoré : Devise déjà exposée"
                                 
             except: continue                                
                                 
