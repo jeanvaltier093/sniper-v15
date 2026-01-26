@@ -20,16 +20,17 @@ def load_json(file):
     if os.path.exists(file):
         try:
             with open(file, "r") as f:
-                return json.load(f)
+                content = f.read()
+                return json.loads(content) if content else ({} if file == DB_FILE else [])
         except: return {} if file == DB_FILE else []
     return {} if file == DB_FILE else []
 
 def save_json(file, data):
     with open(file, "w") as f:
-        json.dump(data, f)
+        json.dump(data, f, indent=4)
 
 # ─────────────────────────────────────────────                                
-# CONFIG TELEGRAM (SECRET VIA STREAMLIT)                                
+# CONFIG TELEGRAM                                
 # ─────────────────────────────────────────────                                
 if "TOKEN_TELEGRAM" not in st.session_state:                                
     st.session_state["TOKEN_TELEGRAM"] = "8150058407:AAFg44ySihFKBO1UW69QZqi07otqeB2IK5s"                                
@@ -51,31 +52,21 @@ def send_telegram_msg(message):
 # ─────────────────────────────────────────────                                
 if st.button("📩 Test Telegram"):                                
     send_telegram_msg("✅ Test Telegram réussi depuis Sniper V16.4.1")                                
-    st.success("Message de test envoyé ! Vérifie ton Telegram.")                                
+    st.success("Message de test envoyé !")                                
     
 # ─────────────────────────────────────────────                                
 # FILTRE HORAIRE ET JOURS (PARIS)                                
 # ─────────────────────────────────────────────                                
 def is_trading_session(category):
-    # La Crypto n'a pas de restriction de session
-    if category == "CRYPTO":
-        return True
-        
+    if category == "CRYPTO": return True
     now = datetime.datetime.now(ZoneInfo("Europe/Paris"))                                
-    weekday = now.weekday()  # 0=Lundi, 5=Samedi, 6=Dimanche
+    weekday = now.weekday()
     hour = now.hour                                
-    
-    # Blocage total le Samedi
-    if weekday == 5: 
-        return False
-    # Blocage le Dimanche (Sauf après 22h pour l'ouverture Asie si tu veux, sinon False tout le dimanche)
-    if weekday == 6:
-        return False
-    # En semaine : 8h à 20h
+    if weekday >= 5: return False
     return 8 <= hour < 20                                
     
 # ─────────────────────────────────────────────                                
-# FILTRE NEWS HIGH IMPACT                                
+# FILTRE NEWS                                
 # ─────────────────────────────────────────────                                
 def get_high_impact_news():                                
     try:                                
@@ -89,8 +80,7 @@ def get_high_impact_news():
                     "currency": e["currency"]                                
                 })                                
         return news                                
-    except:                                
-        return []                                
+    except: return []                                
     
 def is_news_block(pair, news):                                
     now_utc = datetime.datetime.now(datetime.timezone.utc)                                
@@ -100,12 +90,8 @@ def is_news_block(pair, news):
                 return True                                
     return False                                
     
-# ─────────────────────────────────────────────                                
-# PIP FACTOR                                
-# ─────────────────────────────────────────────                                
 def pip_factor(pair):                                
-    if "BTC" in pair:                                
-        return 1                                
+    if "BTC" in pair: return 1                                
     return 100 if "JPY" in pair else 10000                                
     
 # ─────────────────────────────────────────────                                
@@ -113,27 +99,6 @@ def pip_factor(pair):
 # ─────────────────────────────────────────────                                
 st.set_page_config(page_title="Sniper V16.4.1 — Swing Forex + BTC PRO", layout="wide")                                
 st_autorefresh(interval=180000, key="refresh")                                
-    
-# Chargement des données persistantes
-active_trades = load_json(DB_FILE)
-history_trades = load_json(HISTORY_FILE)
-    
-# ─────────────────────────────────────────────                                
-# ACTIFS                                
-# ─────────────────────────────────────────────                                
-ASSETS = {                                
-    "FOREX": [                                
-        "EURUSD=X","GBPUSD=X","USDJPY=X","AUDUSD=X","USDCAD=X","USDCHF=X","NZDUSD=X",                                
-        "EURGBP=X","EURJPY=X","GBPJPY=X","EURAUD=X","EURCAD=X","EURCHF=X","EURNZD=X",                                
-        "GBPAUD=X","GBPCAD=X","GBPCHF=X","GBPNZD=X",                                
-        "AUDJPY=X","AUDCAD=X","AUDCHF=X","AUDNZD=X",                                
-        "CADJPY=X","CADCHF=X","CHFJPY=X",                                
-        "NZDJPY=X","NZDCAD=X","NZDCHF=X"                                
-    ],                                
-    "CRYPTO": [                                
-        "BTC-USD"                                
-    ]                                
-}                                
     
 # ─────────────────────────────────────────────                                
 # MOTEUR PRINCIPAL                                
@@ -153,34 +118,27 @@ def run_engine():
             try:                                
                 name = ticker.replace("=X","").replace("-USD","USD")                                
 
-                # 🔒 GESTION DU VERROU ET DE L'HISTORIQUE
-                if name in active_trades:
-                    trade = active_trades[name]
+                # Rechargement forcé du fichier JSON à chaque itération d'actif
+                current_active = load_json(DB_FILE)
+
+                if name in current_active:
+                    trade = current_active[name]
                     df_m15 = data_m15[ticker].dropna()
                     current_price = round(float(df_m15["Close"].iloc[-1]), 5)
-                    
-                    is_win = False
-                    is_loss = False
-                    
-                    if trade["type"] == "ACHAT 🚀":
-                        if current_price >= trade["tp"]: is_win = True
-                        elif current_price <= trade["sl"]: is_loss = True
-                    else: # VENTE
-                        if current_price <= trade["tp"]: is_win = True
-                        elif current_price >= trade["sl"]: is_loss = True
+                    is_win = (trade["type"] == "ACHAT 🚀" and current_price >= trade["tp"]) or (trade["type"] == "VENTE 🔻" and current_price <= trade["tp"])
+                    is_loss = (trade["type"] == "ACHAT 🚀" and current_price <= trade["sl"]) or (trade["type"] == "VENTE 🔻" and current_price >= trade["sl"])
                     
                     if is_win or is_loss:
-                        gain_rr = trade["rr"] if is_win else -1.0
-                        history_trades.append({
+                        hist = load_json(HISTORY_FILE)
+                        hist.append({
                             "Date": datetime.datetime.now().strftime("%d/%m %H:%M"),
-                            "Actif": name,
-                            "Type": trade["type"],
+                            "Actif": name, "Type": trade["type"],
                             "Résultat": "✅ WIN" if is_win else "❌ LOSS",
-                            "RR": round(gain_rr, 2)
+                            "RR": round(trade["rr"] if is_win else -1.0, 2)
                         })
-                        save_json(HISTORY_FILE, history_trades)
-                        del active_trades[name]
-                        save_json(DB_FILE, active_trades)
+                        save_json(HISTORY_FILE, hist)
+                        del current_active[name]
+                        save_json(DB_FILE, current_active)
                     else:
                         results.append({
                             "Actif": name, "Catégorie": category, "Signal": "EN COURS ⏳",
@@ -191,186 +149,118 @@ def run_engine():
                         })
                         continue
 
-                comment = "-"                                
-                                
-                df_m15 = data_m15[ticker].dropna()                                
-                df_h1  = data_h1[ticker].dropna()                                
-                df_h4  = data_h4[ticker].dropna()                                
-                df_d1  = data_d1[ticker].dropna()                                
-                                
-                news_block = False              
-                session_block = False              
-                                
-                if category == "FOREX" and is_news_block(name, news_today):                                
-                    comment = "News high impact"                                
-                    news_block = True              
-                                
-                if not is_trading_session(category):                                
-                    comment = "Hors session / Week-end" if comment == "-" else comment + " + Hors session"                                
-                    session_block = True              
-                                
-                close = float(df_m15["Close"].iloc[-1])                                
-                high  = float(df_m15["High"].iloc[-1])                                
-                low   = float(df_m15["Low"].iloc[-1])                                
-                                
-                atr_m15 = AverageTrueRange(df_m15["High"], df_m15["Low"], df_m15["Close"], 14).average_true_range().iloc[-1]                                
-                atr_h4 = AverageTrueRange(df_h4["High"], df_h4["Low"], df_h4["Close"], 14).average_true_range().iloc[-1]                                
-                                
-                highest_20d = df_d1["High"].iloc[-21:-1].max()                                
-                lowest_20d = df_d1["Low"].iloc[-21:-1].min()                                
-                                
-                ema200_d = EMAIndicator(df_d1["Close"], 200).ema_indicator().iloc[-1]                                
-                ema50_h1 = EMAIndicator(df_h1["Close"], 50).ema_indicator().iloc[-1]                                
-                                
-                box_high = df_m15["High"].iloc[-21:-1].max()                                
-                box_low  = df_m15["Low"].iloc[-21:-1].min()                                
-                buffer = atr_m15 * 0.20                                
-                tolerance = buffer * 0.30                                
-                                
-                breakout_up_close = close > box_high + buffer - tolerance                                
-                breakout_dn_close = close < box_low - buffer + tolerance                                
-                                
-                bull_power = (close - low) / (high - low + 1e-6)                                
-                bear_power = (high - close) / (high - low + 1e-6)                                
-                                
-                breakout_up_wick = high > box_high + buffer and bull_power > 0.55                                
-                breakout_dn_wick = low  < box_low  - buffer and bear_power > 0.55                                
-                                
-                breakout_up = breakout_up_close or breakout_up_wick                                
-                breakout_dn = breakout_dn_close or breakout_dn_wick                                
-                                
-                adx_m = ADXIndicator(df_m15["High"], df_m15["Low"], df_m15["Close"])                                
-                adx_val = adx_m.adx().iloc[-1]                                
-                p_di = adx_m.adx_pos().iloc[-1]                                
-                m_di = adx_m.adx_neg().iloc[-1]                                
-                adx_h4 = ADXIndicator(df_h4["High"], df_h4["Low"], df_h4["Close"]).adx().iloc[-1]
-              
-                adx_min_h4 = 12 if category == "FOREX" else 25                                
-                adx_block = adx_h4 < adx_min_h4
-                if adx_block:
-                    comment = "ADX Faible (H4)" if comment == "-" else comment + " + ADX Faible (H4)"
-                                
-                blocked = adx_block or news_block or session_block                                
-                                
-                trend_up = close > ema200_d                                
-                h1_ok = close > ema50_h1 if trend_up else close < ema50_h1                                
-                                
-                score = 0                                
-                if adx_val > (28 if category=="CRYPTO" else 22): score += 40                                
-                if abs(p_di - m_di) > 8: score += 35                                
-                score += 20 if h1_ok else 0                                
-                if trend_up and close > highest_20d: score += 10                                
-                if not trend_up and close < lowest_20d: score += 10                                
-                                
-                score = max(score, 0)                                
-                score_min = 65                                
-              
-                reliability = "-"
-                if score >= 90: reliability = "🟥 Exceptionnelle"                                
-                elif score >= 80: reliability = "🟣 Très forte"                                
-                elif score >= 65: reliability = "🟢 Solide"                                
-                                
-                signal, sl, tp = "ATTENDRE", None, None                                
-                rr = 0                                
-                                
-                if score >= score_min and not blocked:                                
-                    if trend_up and (breakout_up or (adx_val > 20 and p_di > m_di)):                                
-                        signal = "ACHAT 🚀"                                
-                        sl = max(close - atr_h4*1.5, lowest_20d)                                
-                        tp = min(close + (close-sl)*2.1, highest_20d)                                
-                    elif not trend_up and (breakout_dn or (adx_val > 20 and m_di > p_di)):                                
-                        signal = "VENTE 🔻"                                
-                        sl = min(close + atr_h4*1.5, highest_20d)                                
-                        tp = max(close - (sl-close)*2.1, lowest_20d)
-                                
-                if sl and tp:                                
-                    spread = 0.00012 if "JPY" not in name else 0.0016 if category == "FOREX" else close * 0.0005                                
-                    risk = abs(close - sl) + spread                                
-                    reward = abs(tp - close) - spread                                
-                    rr = reward / risk if risk > 0 else 0                                
-                                
-                    if rr < 1.2:                                
-                        signal = "ATTENDRE"                                
-                        comment = "RR réel IG insuffisant après spread"                                
+                df_m15 = data_m15[ticker].dropna()
+                df_h1  = data_h1[ticker].dropna()
+                df_h4  = data_h4[ticker].dropna()
+                df_d1  = data_d1[ticker].dropna()
                 
-                if signal == "ATTENDRE" and comment == "-":                                
-                    comment = "Setup valide mais breakout non confirmed" if score >= score_min else "Conditions insuffisantes"                                
+                news_block = category == "FOREX" and is_news_block(name, news_today)
+                session_block = not is_trading_session(category)
                                 
-                factor = pip_factor(name)                                
+                close, high, low = float(df_m15["Close"].iloc[-1]), float(df_m15["High"].iloc[-1]), float(df_m15["Low"].iloc[-1])
+                atr_m15 = AverageTrueRange(df_m15["High"], df_m15["Low"], df_m15["Close"], 14).average_true_range().iloc[-1]
+                atr_h4 = AverageTrueRange(df_h4["High"], df_h4["Low"], df_h4["Close"], 14).average_true_range().iloc[-1]
+                highest_20d, lowest_20d = df_d1["High"].iloc[-21:-1].max(), df_d1["Low"].iloc[-21:-1].min()
+                ema200_d = EMAIndicator(df_d1["Close"], 200).ema_indicator().iloc[-1]
+                ema50_h1 = EMAIndicator(df_h1["Close"], 50).ema_indicator().iloc[-1]
+                
+                box_high, box_low = df_m15["High"].iloc[-21:-1].max(), df_m15["Low"].iloc[-21:-1].min()
+                buffer = atr_m15 * 0.20
+                breakout_up = (close > box_high + buffer * 0.7) or (high > box_high + buffer and (close-low)/(high-low+1e-6) > 0.55)
+                breakout_dn = (close < box_low - buffer * 0.7) or (low < box_low - buffer and (high-close)/(high-low+1e-6) > 0.55)
                                 
-                results.append({                                
-                    "Actif": name, "Catégorie": category, "Signal": signal,                                
-                    "Fiabilité": reliability, "Score": f"{score}%",                                
-                    "Prix": round(close, 2 if category=="CRYPTO" else 5),                                
-                    "SL Prix": round(sl, 5) if sl else "-", "SL Pips": round(abs(close-sl)*factor,1) if sl else "-",                                
-                    "TP Prix": round(tp, 5) if tp else "-", "TP Pips": round(abs(tp-close)*factor,1) if tp else "-",                                
-                    "Commentaire": comment                                
-                })                                
+                adx_m = ADXIndicator(df_m15["High"], df_m15["Low"], df_m15["Close"])
+                adx_val, p_di, m_di = adx_m.adx().iloc[-1], adx_m.adx_pos().iloc[-1], adx_m.adx_neg().iloc[-1]
+                adx_h4 = ADXIndicator(df_h4["High"], df_h4["Low"], df_h4["Close"]).adx().iloc[-1]
+                adx_block = adx_h4 < (12 if category == "FOREX" else 25)
+                
+                comment = "-"
+                if news_block: comment = "News"
+                if session_block: comment = "Hors session" if comment == "-" else comment + "+Session"
+                if adx_block: comment = "ADX H4 Faible" if comment == "-" else comment + "+ADX"
+                
+                trend_up = close > ema200_d
+                h1_ok = close > ema50_h1 if trend_up else close < ema50_h1
+                score = (40 if adx_val > 22 else 0) + (35 if abs(p_di - m_di) > 8 else 0) + (20 if h1_ok else 0) + (10 if (trend_up and close > highest_20d) or (not trend_up and close < lowest_20d) else 0)
+                
+                reliability = "🟢 Solide" if score >= 65 else "🟣 Très forte" if score >= 80 else "🟥 Exceptionnelle" if score >= 90 else "-"
+                signal, sl, tp, rr = "ATTENDRE", None, None, 0
+                
+                if score >= 65 and not (adx_block or news_block or session_block):
+                    if trend_up and (breakout_up or (adx_val > 20 and p_di > m_di)):
+                        signal = "ACHAT 🚀"
+                        # SL au plus bas des 20j ou ATR. TP forcément au-dessus du prix.
+                        sl = round(max(close - atr_h4*1.5, lowest_20d), 5)
+                        tp = round(close + abs(close - sl) * 2.1, 5)
+                    elif not trend_up and (breakout_dn or (adx_val > 20 and m_di > p_di)):
+                        signal = "VENTE 🔻"
+                        # SL au plus haut des 20j ou ATR. TP forcément au-dessous du prix.
+                        sl = round(min(close + atr_h4*1.5, highest_20d), 5)
+                        tp = round(close - abs(sl - close) * 2.1, 5)
+                
+                if sl and tp:
+                    spread = 0.00012 if "JPY" not in name else 0.0016 if category=="FOREX" else close*0.0005
+                    rr = (abs(tp-close)-spread)/(abs(close-sl)+spread)
+                    if rr < 1.2: signal, comment = "ATTENDRE", "RR trop faible"
+
+                results.append({
+                    "Actif": name, "Catégorie": category, "Signal": signal, "Fiabilité": reliability, "Score": f"{score}%",
+                    "Prix": round(close, 5), "SL Prix": sl if sl else "-", "TP Prix": tp if tp else "-", "Commentaire": comment
+                })
                                 
-                # SAUVEGARDE DU TRADE ET ENVOI TÉLÉGRAM FILTRÉ
-                if signal in ["ACHAT 🚀", "VENTE 🔻"] and name not in active_trades:
-                    # --- LOGIQUE DE NON-DUPLICATION PAR DEVISE ---
-                    currency_1 = name[:3]
-                    currency_2 = name[3:6]
-                    duplicate_found = False
-                    for active_name in active_trades.keys():
-                        if currency_1 in active_name or currency_2 in active_name:
-                            duplicate_found = True
-                            break
+                if signal in ["ACHAT 🚀", "VENTE 🔻"]:
+                    # --- SÉCURITÉ ANTI-DOUBLON ---
+                    # On relit le fichier JSON juste avant d'envoyer pour être certain qu'aucun autre cycle n'a pris le trade
+                    check_active = load_json(DB_FILE)
+                    c1, c2 = name[:3], name[3:6]
+                    is_exposed = any(c1 in k or c2 in k for k in check_active.keys())
                     
-                    if not duplicate_found:
-                        active_trades[name] = {
-                            "type": signal, "sl": round(sl, 5), "tp": round(tp, 5), "entry": round(close, 5), "rr": round(rr, 2)
-                        }
-                        save_json(DB_FILE, active_trades)
-                        
-                        # CONDITION TELEGRAM : Uniquement si Score >= 75
+                    if name not in check_active and not is_exposed:
+                        check_active[name] = {"type": signal, "sl": sl, "tp": tp, "entry": round(close, 5), "rr": round(rr, 2)}
+                        save_json(DB_FILE, check_active)
                         if score >= 75:
-                            send_telegram_msg(                                
-                                f"🦅 SIGNAL SNIPER V16.4.1\n{name} | {signal}\nFiabilité: {reliability} | Score: {score}%\nRR: {round(rr,2)}\nPrix: {close}\nSL: {sl}\nTP: {tp}"                
-                            )                                
-                    else:
-                        # On met à jour le dernier résultat pour informer l'utilisateur
-                        results[-1]["Commentaire"] = "Signal ignoré : Devise déjà exposée"
-                                
-            except: continue                                
-                                
+                            send_telegram_msg(f"🦅 SIGNAL SNIPER\n{name} | {signal}\nScore: {score}%\nRR: {round(rr,2)}\nPrix: {round(close,5)}\nSL: {sl}\nTP: {tp}")
+                    elif is_exposed and name not in check_active:
+                        results[-1]["Commentaire"] = "Devise déjà en cours"
+
+            except: continue
     return results                                
-                                
+
+# ─────────────────────────────────────────────                                
+# CONFIGURATION ACTIFS                                
+# ─────────────────────────────────────────────                                
+ASSETS = {                                
+    "FOREX": [                                
+        "EURUSD=X","GBPUSD=X","USDJPY=X","AUDUSD=X","USDCAD=X","USDCHF=X","NZDUSD=X",                                
+        "EURGBP=X","EURJPY=X","GBPJPY=X","EURAUD=X","EURCAD=X","EURCHF=X","EURNZD=X",                                
+        "GBPAUD=X","GBPCAD=X","GBPCHF=X","GBPNZD=X",                                
+        "AUDJPY=X","AUDCAD=X","AUDCHF=X","AUDNZD=X",                                
+        "CADJPY=X","CADCHF=X","CHFJPY=X",                                
+        "NZDJPY=X","NZDCAD=X","NZDCHF=X"                                
+    ],                                
+    "CRYPTO": ["BTC-USD"]                                
+}
+
 # ─────────────────────────────────────────────                                
 # AFFICHAGE STREAMLIT                                
 # ─────────────────────────────────────────────                                
-st.title("🦅 Sniper V16.4.1 — Swing Forex + BTC PRO")                                
+st.title("🦅 Sniper V16.4.1")                                
 
-# Section Stats Historiques
+history_trades = load_json(HISTORY_FILE)
 if history_trades:
-    st.header("📊 Historique de Performance")
-    df_hist = pd.DataFrame(history_trades)
-    
-    col1, col2, col3 = st.columns(3)
-    win_count = len(df_hist[df_hist["Résultat"] == "✅ WIN"])
-    total_trades = len(df_hist)
-    winrate = (win_count / total_trades * 100) if total_trades > 0 else 0
-    total_rr = df_hist["RR"].sum()
-    
-    col1.metric("Winrate", f"{round(winrate, 1)}%")
-    col2.metric("Trades Clôturés", total_trades)
-    col3.metric("Gain Cumulé (RR)", f"{round(total_rr, 2)} R")
-    
-    with st.expander("Voir le détail des trades clôturés"):
-        st.table(df_hist.tail(10))
+    df_h = pd.DataFrame(history_trades)
+    c1, c2, c3 = st.columns(3)
+    winrate = (len(df_h[df_h["Résultat"]=="✅ WIN"])/len(df_h)*100)
+    c1.metric("Winrate", f"{round(winrate,1)}%")
+    c2.metric("Total", len(df_h))
+    c3.metric("Profit RR", f"{round(df_h['RR'].sum(),2)}R")
 
-# Signaux en cours
-st.header("🎯 Signaux en Direct")
+st.header("🎯 Signaux")
 data = run_engine()                                
-if data:                                
-    st.dataframe(pd.DataFrame(data), use_container_width=True)                                
+if data: st.dataframe(pd.DataFrame(data), use_container_width=True)                                
 
-# Contrôles
 with st.sidebar:
-    if st.button("🗑 Réinitialiser Verrous"):
-        if os.path.exists(DB_FILE): os.remove(DB_FILE)
-        st.success("Verrous supprimés.")
-    if st.button("🔴 Effacer Historique"):
-        if os.path.exists(HISTORY_FILE): os.remove(HISTORY_FILE)
-        st.success("Historique vidé.")
+    if st.button("🗑 Reset Verrous"):
+        if os.path.exists(DB_FILE): os.remove(DB_FILE); st.rerun()
+    if st.button("🔴 Reset Hist"):
+        if os.path.exists(HISTORY_FILE): os.remove(HISTORY_FILE); st.rerun()
