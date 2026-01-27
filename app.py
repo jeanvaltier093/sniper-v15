@@ -1,5 +1,5 @@
 import streamlit as st                                
-import pd as pd                                
+import pandas as pd                                
 import yfinance as yf                                
 import requests                                
 from ta.trend import EMAIndicator, ADXIndicator                                
