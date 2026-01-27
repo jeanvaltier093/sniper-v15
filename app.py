@@ -1,5 +1,5 @@
 import streamlit as st                                
-import pandas as pd                                
+import pd as pd                                
 import yfinance as yf                                
 import requests                                
 from ta.trend import EMAIndicator, ADXIndicator                                
@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 DB_FILE = "active_trades_db.json"
 HISTORY_FILE = "trade_history_db.json"
 
-# Initialisation du verrou de session (Maintenu par sécurité, mais la persistance JSON prime désormais)
+# Initialisation du verrou de session
 if "sent_signals" not in st.session_state:
     st.session_state["sent_signals"] = set()
 
@@ -265,7 +265,6 @@ def run_engine():
                 score = max(score, 0)                                
                 score_min = 65                                
               
-                # --- CORRECTION BUG LOGIQUE FIABILITÉ ---
                 reliability = "-"
                 if score >= 90: reliability = "🟥 Exceptionnelle"                                
                 elif score >= 80: reliability = "🟣 Très forte"                                
@@ -277,19 +276,17 @@ def run_engine():
                 if score >= score_min and not blocked:                                
                     if trend_up and (breakout_up or (adx_val > 20 and p_di > m_di)):                                
                         signal = "ACHAT 🚀"                                
-                        # --- CORRECTION TP/SL : SÉCURITÉ DIRECTIONNELLE ---
                         sl = round(max(close - (atr_h4 * 1.5), lowest_20d), 5)
-                        sl = min(sl, close - atr_m15 * 0.8) # Sécurité : sl doit être sous le prix
+                        sl = min(sl, close - atr_m15 * 0.8) 
                         tp = round(close + (abs(close - sl) * 2.1), 5)
-                        tp = max(tp, close + atr_m15 * 1.2) # Sécurité : tp doit être au dessus
+                        tp = max(tp, close + atr_m15 * 1.2) 
                         
                     elif not trend_up and (breakout_dn or (adx_val > 20 and m_di > p_di)):                                
                         signal = "VENTE 🔻"                                
-                        # --- CORRECTION TP/SL : SÉCURITÉ DIRECTIONNELLE ---
                         sl = round(min(close + (atr_h4 * 1.5), highest_20d), 5)
-                        sl = max(sl, close + atr_m15 * 0.8) # Sécurité : sl doit être au dessus du prix
+                        sl = max(sl, close + atr_m15 * 0.8) 
                         tp = round(close - (abs(sl - close) * 2.1), 5)
-                        tp = min(tp, close - atr_m15 * 1.2) # Sécurité : tp doit être en dessous
+                        tp = min(tp, close - atr_m15 * 1.2) 
                                 
                 if sl and tp:                                
                     spread = 0.00012 if "JPY" not in name else 0.0016 if category == "FOREX" else close * 0.0005                                
@@ -315,31 +312,18 @@ def run_engine():
                     "Commentaire": comment                                
                 })                                
                                 
-                # SAUVEGARDE DU TRADE ET ENVOI TÉLÉGRAM FILTRÉ
+                # SAUVEGARDE ET ENVOI TÉLÉGRAM
                 if signal in ["ACHAT 🚀", "VENTE 🔻"] and name not in active_trades:
-                    # --- FILTRE DOUBLON DEVISE (GARDÉ TEL QUEL) ---
-                    currency_1 = name[:3]
-                    currency_2 = name[3:6]
-                    duplicate_found = False
-                    for active_name in active_trades.keys():
-                        if currency_1 in active_name or currency_2 in active_name:
-                            duplicate_found = True
-                            break
+                    # --- MODIFICATION ICI : VERIFICATION PAIRE EXACTE UNIQUEMENT ---
+                    active_trades[name] = {
+                        "type": signal, "sl": round(sl, 5), "tp": round(tp, 5), "entry": round(close, 5), "rr": round(rr, 2), "timestamp": datetime.datetime.now().isoformat()
+                    }
+                    save_json(DB_FILE, active_trades)
                     
-                    if not duplicate_found:
-                        # --- CORRECTION : PERSISTANCE DU VERROU ---
-                        # On ne vérifie plus seulement session_state, mais la présence dans active_trades (JSON)
-                        active_trades[name] = {
-                            "type": signal, "sl": round(sl, 5), "tp": round(tp, 5), "entry": round(close, 5), "rr": round(rr, 2), "timestamp": datetime.datetime.now().isoformat()
-                        }
-                        save_json(DB_FILE, active_trades)
-                        
-                        if score >= 75:
-                            send_telegram_msg(                                
-                                f"🦅 SIGNAL SNIPER V16.4.1\n{name} | {signal}\nFiabilité: {reliability} | Score: {score}%\nRR: {round(rr,2)}\nPrix: {close}\nSL: {sl}\nTP: {tp}"                
-                            )                                
-                    else:
-                        results[-1]["Commentaire"] = "Signal ignoré : Devise déjà exposée"
+                    if score >= 75:
+                        send_telegram_msg(                                
+                            f"🦅 SIGNAL SNIPER V16.4.1\n{name} | {signal}\nFiabilité: {reliability} | Score: {score}%\nRR: {round(rr,2)}\nPrix: {close}\nSL: {sl}\nTP: {tp}"                
+                        )                                
                                 
             except: continue                                
                                 
@@ -350,7 +334,6 @@ def run_engine():
 # ─────────────────────────────────────────────                                
 st.title("🦅 Sniper V16.4.1 — Swing Forex + BTC PRO")                                
 
-# Section Stats Historiques
 if history_trades:
     st.header("📊 Historique de Performance")
     df_hist = pd.DataFrame(history_trades)
@@ -368,13 +351,11 @@ if history_trades:
     with st.expander("Voir le détail des trades clôturés"):
         st.table(df_hist.tail(10))
 
-# Signaux en cours
 st.header("🎯 Signaux en Direct")
 data = run_engine()                                
 if data:                                
     st.dataframe(pd.DataFrame(data), use_container_width=True)                                
 
-# Contrôles
 with st.sidebar:
     if st.button("🗑 Réinitialiser Verrous"):
         if os.path.exists(DB_FILE): os.remove(DB_FILE)
