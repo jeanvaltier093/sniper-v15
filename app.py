@@ -8,8 +8,42 @@ from streamlit_autorefresh import st_autorefresh
 import datetime                                
 import json
 import os
+import base64
 from zoneinfo import ZoneInfo                                
-    
+
+# ─────────────────────────────────────────────                                
+# PERSISTANCE : SYNC AUTOMATIQUE GITHUB
+# ───────────────────────────────────────────── 
+def sync_to_github(file_path, data):
+    """Enregistre automatiquement le JSON sur GitHub sans intervention"""
+    try:
+        if "GITHUB_TOKEN" not in st.secrets:
+            return
+            
+        token = st.secrets["GITHUB_TOKEN"]
+        repo = st.secrets["GITHUB_REPO"] # format: "pseudo/nom-du-depot"
+        url = f"https://api.github.com/repos/{repo}/contents/{file_path}"
+        headers = {
+            "Authorization": f"token {token}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+        
+        # Récupérer le SHA du fichier existant (obligatoire pour mettre à jour)
+        res = requests.get(url, headers=headers)
+        sha = res.json().get("sha") if res.status_code == 200 else None
+        
+        content = base64.b64encode(json.dumps(data, indent=4).encode()).decode()
+        payload = {
+            "message": f"Update {file_path} via Sniper Auto-Backup",
+            "content": content
+        }
+        if sha:
+            payload["sha"] = sha
+        
+        requests.put(url, headers=headers, json=payload)
+    except Exception as e:
+        pass
+
 # ─────────────────────────────────────────────                                
 # PERSISTANCE : GESTION DES FICHIERS JSON
 # ─────────────────────────────────────────────                                
@@ -31,6 +65,8 @@ def load_json(file):
 def save_json(file, data):
     with open(file, "w") as f:
         json.dump(data, f)
+    # 🔄 APPEL DE LA SYNCHRO GITHUB AUTOMATIQUE
+    sync_to_github(file, data)
 
 # ─────────────────────────────────────────────                                
 # CONFIG TELEGRAM (SECRET VIA STREAMLIT)                                
