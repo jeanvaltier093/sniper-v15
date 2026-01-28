@@ -143,10 +143,11 @@ def run_engine():
     news_today = get_high_impact_news()                                
     tickers = [t for cat in ASSETS.values() for t in cat]                                
                                 
-    data_m15 = yf.download(tickers, period="5d", interval="15m", group_by="ticker", progress=False)                                
-    data_h1  = yf.download(tickers, period="21d", interval="1h", group_by="ticker", progress=False)                                
-    data_h4  = yf.download(tickers, period="60d", interval="4h", group_by="ticker", progress=False)                                
-    data_d1  = yf.download(tickers, period="200d", interval="1d", group_by="ticker", progress=False)                                
+    # Correction : threads=False pour éviter le RuntimeError sur Streamlit Cloud
+    data_m15 = yf.download(tickers, period="5d", interval="15m", group_by="ticker", progress=False, threads=False)                                
+    data_h1  = yf.download(tickers, period="21d", interval="1h", group_by="ticker", progress=False, threads=False)                                
+    data_h4  = yf.download(tickers, period="60d", interval="4h", group_by="ticker", progress=False, threads=False)                                
+    data_d1  = yf.download(tickers, period="200d", interval="1d", group_by="ticker", progress=False, threads=False)                                
                                 
     for category, symbols in ASSETS.items():                                
         for ticker in symbols:                                
