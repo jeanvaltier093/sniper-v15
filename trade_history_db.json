@@ -19,5 +19,12 @@
         "Type": "VENTE \ud83d\udd3b",
         "R\u00e9sultat": "\u274c LOSS",
         "RR": -1.0
+    },
+    {
+        "Date": "29/01 10:33",
+        "Actif": "AUDUSD",
+        "Type": "VENTE \ud83d\udd3b",
+        "R\u00e9sultat": "\u2705 WIN",
+        "RR": 1.52
     }
 ]
