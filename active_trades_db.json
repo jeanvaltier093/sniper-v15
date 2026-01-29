@@ -39,14 +39,6 @@
         "rr": 1.94,
         "timestamp": "2026-01-29T08:14:27.797860"
     },
-    "EURCAD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 1.62432,
-        "tp": 1.60588,
-        "entry": 1.61837,
-        "rr": 2.04,
-        "timestamp": "2026-01-29T09:30:56.606597"
-    },
     "GBPUSD": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 1.38293,
