@@ -15,14 +15,6 @@
         "rr": 2.06,
         "timestamp": "2026-01-29T07:02:07.789061"
     },
-    "GBPAUD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 1.9637,
-        "tp": 1.9363,
-        "entry": 1.95486,
-        "rr": 2.06,
-        "timestamp": "2026-01-29T07:02:08.586048"
-    },
     "GBPNZD": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 2.28428,
