@@ -47,14 +47,6 @@
         "rr": 2.05,
         "timestamp": "2026-01-29T07:49:27.655405"
     },
-    "NZDCAD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 0.82166,
-        "tp": 0.81992,
-        "entry": 0.8211,
-        "rr": 1.56,
-        "timestamp": "2026-01-29T07:49:29.086060"
-    },
     "EURGBP": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 0.86755,
