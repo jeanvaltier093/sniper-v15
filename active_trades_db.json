@@ -119,14 +119,6 @@
         "rr": 2.04,
         "timestamp": "2026-01-29T11:31:58.246362"
     },
-    "NZDUSD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 0.60629,
-        "tp": 0.605,
-        "entry": 0.60588,
-        "rr": 1.41,
-        "timestamp": "2026-01-29T11:31:59.642323"
-    },
     "AUDUSD": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 0.70526,
