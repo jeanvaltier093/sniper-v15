@@ -95,14 +95,6 @@
         "rr": 2.0,
         "timestamp": "2026-01-29T16:02:48.645740"
     },
-    "NZDUSD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 0.60445,
-        "tp": 0.60151,
-        "entry": 0.6035,
-        "rr": 1.75,
-        "timestamp": "2026-01-29T16:02:50.703258"
-    },
     "EURJPY": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 183.2313,
