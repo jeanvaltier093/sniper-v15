@@ -39,14 +39,6 @@
         "rr": 1.94,
         "timestamp": "2026-01-29T08:14:27.797860"
     },
-    "AUDCAD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 0.95571,
-        "tp": 0.95181,
-        "entry": 0.95445,
-        "rr": 1.83,
-        "timestamp": "2026-01-29T08:55:34.008153"
-    },
     "EURCAD": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 1.62432,
