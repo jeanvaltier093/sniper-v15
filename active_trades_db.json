@@ -119,14 +119,6 @@
         "rr": 1.99,
         "timestamp": "2026-01-29T16:03:10.519791"
     },
-    "USDJPY": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 154.04053,
-        "tp": 150.43978,
-        "entry": 152.879,
-        "rr": 2.1,
-        "timestamp": "2026-01-29T17:49:30.803665"
-    },
     "EURAUD": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 1.72817,
