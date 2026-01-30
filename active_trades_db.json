@@ -95,14 +95,6 @@
         "rr": 2.02,
         "timestamp": "2026-01-29T16:03:03.394914"
     },
-    "EURAUD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 1.72817,
-        "tp": 1.69565,
-        "entry": 1.71768,
-        "rr": 2.07,
-        "timestamp": "2026-01-29T17:49:32.212389"
-    },
     "EURCHF": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 0.9196,
