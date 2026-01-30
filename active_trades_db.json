@@ -103,14 +103,6 @@
         "rr": 2.02,
         "timestamp": "2026-01-29T16:03:03.394914"
     },
-    "NZDJPY": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 92.79855,
-        "tp": 90.85933,
-        "entry": 92.173,
-        "rr": 2.09,
-        "timestamp": "2026-01-29T16:03:07.746626"
-    },
     "NZDCAD": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 0.82044,
