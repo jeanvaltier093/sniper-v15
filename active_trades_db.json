@@ -103,14 +103,6 @@
         "rr": 2.02,
         "timestamp": "2026-01-29T16:03:03.394914"
     },
-    "CHFJPY": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 200.08222,
-        "tp": 196.58784,
-        "entry": 198.955,
-        "rr": 2.1,
-        "timestamp": "2026-01-29T16:03:06.428165"
-    },
     "NZDJPY": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 92.79855,
