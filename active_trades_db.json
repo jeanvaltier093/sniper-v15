@@ -39,14 +39,6 @@
         "rr": 1.94,
         "timestamp": "2026-01-29T08:14:27.797860"
     },
-    "GBPUSD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 1.38293,
-        "tp": 1.37466,
-        "entry": 1.38026,
-        "rr": 1.97,
-        "timestamp": "2026-01-29T10:33:00.777376"
-    },
     "AUDJPY": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 108.74427,
