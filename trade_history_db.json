@@ -180,5 +180,12 @@
         "Type": "VENTE \ud83d\udd3b",
         "R\u00e9sultat": "\u2705 WIN",
         "RR": 2.07
+    },
+    {
+        "Date": "30/01 19:10",
+        "Actif": "USDCAD",
+        "Type": "VENTE \ud83d\udd3b",
+        "R\u00e9sultat": "\u274c LOSS",
+        "RR": -1.0
     }
 ]
