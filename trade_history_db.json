@@ -173,5 +173,12 @@
         "Type": "VENTE \ud83d\udd3b",
         "R\u00e9sultat": "\u274c LOSS",
         "RR": -1.0
+    },
+    {
+        "Date": "30/01 15:42",
+        "Actif": "EURAUD",
+        "Type": "VENTE \ud83d\udd3b",
+        "R\u00e9sultat": "\u2705 WIN",
+        "RR": 2.07
     }
 ]
