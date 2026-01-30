@@ -95,14 +95,6 @@
         "rr": 2.02,
         "timestamp": "2026-01-29T16:03:03.394914"
     },
-    "NZDCAD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 0.82044,
-        "tp": 0.81105,
-        "entry": 0.81741,
-        "rr": 1.98,
-        "timestamp": "2026-01-29T16:03:09.120194"
-    },
     "NZDCHF": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 0.46639,
