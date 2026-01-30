@@ -79,14 +79,6 @@
         "rr": 2.04,
         "timestamp": "2026-01-29T11:31:58.246362"
     },
-    "GBPJPY": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 211.524,
-        "tp": 207.86598,
-        "entry": 210.34399,
-        "rr": 2.1,
-        "timestamp": "2026-01-29T16:02:53.925432"
-    },
     "GBPCHF": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 1.06199,
