@@ -79,14 +79,6 @@
         "rr": 2.04,
         "timestamp": "2026-01-29T11:31:58.246362"
     },
-    "EURJPY": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 183.2313,
-        "tp": 180.34428,
-        "entry": 182.3,
-        "rr": 2.09,
-        "timestamp": "2026-01-29T16:02:52.513244"
-    },
     "GBPJPY": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 211.524,
