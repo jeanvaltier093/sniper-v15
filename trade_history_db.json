@@ -145,5 +145,12 @@
         "Type": "VENTE \ud83d\udd3b",
         "R\u00e9sultat": "\u274c LOSS",
         "RR": -1.0
+    },
+    {
+        "Date": "30/01 09:22",
+        "Actif": "USDJPY",
+        "Type": "VENTE \ud83d\udd3b",
+        "R\u00e9sultat": "\u274c LOSS",
+        "RR": -1.0
     }
 ]
