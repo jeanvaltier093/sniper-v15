@@ -222,5 +222,12 @@
         "Type": "VENTE \ud83d\udd3b",
         "R\u00e9sultat": "\u274c LOSS",
         "RR": -1.0
+    },
+    {
+        "Date": "02/02 14:31",
+        "Actif": "EURUSD",
+        "Type": "VENTE \ud83d\udd3b",
+        "R\u00e9sultat": "\u2705 WIN",
+        "RR": 2.04
     }
 ]
