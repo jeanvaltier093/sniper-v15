@@ -55,14 +55,6 @@
         "rr": 2.04,
         "timestamp": "2026-01-29T16:03:02.007681"
     },
-    "AUDCHF": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 0.54056,
-        "tp": 0.52692,
-        "entry": 0.53616,
-        "rr": 2.02,
-        "timestamp": "2026-01-29T16:03:03.394914"
-    },
     "GBPAUD": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 1.97613,
