@@ -79,14 +79,6 @@
         "rr": 2.02,
         "timestamp": "2026-01-29T16:03:03.394914"
     },
-    "EURCHF": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 0.9196,
-        "tp": 0.90887,
-        "entry": 0.91614,
-        "rr": 2.0,
-        "timestamp": "2026-01-29T17:49:35.223174"
-    },
     "GBPAUD": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 1.97613,
