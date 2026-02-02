@@ -47,14 +47,6 @@
         "rr": 2.01,
         "timestamp": "2026-01-29T10:49:19.042449"
     },
-    "EURUSD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 1.20125,
-        "tp": 1.18285,
-        "entry": 1.19531,
-        "rr": 2.04,
-        "timestamp": "2026-01-29T11:31:58.246362"
-    },
     "AUDCAD": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 0.95224,
