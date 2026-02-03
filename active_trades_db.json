@@ -119,14 +119,6 @@
         "rr": 2.04,
         "timestamp": "2026-02-02T14:31:36.147005"
     },
-    "GBPCHF": {
-        "type": "ACHAT \ud83d\ude80",
-        "sl": 1.0632,
-        "tp": 1.06847,
-        "entry": 1.0649,
-        "rr": 1.9,
-        "timestamp": "2026-02-02T17:36:18.703581"
-    },
     "AUDCHF": {
         "type": "ACHAT \ud83d\ude80",
         "sl": 0.54076,
