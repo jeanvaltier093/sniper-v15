@@ -31,14 +31,6 @@
         "rr": 1.94,
         "timestamp": "2026-01-29T08:14:27.797860"
     },
-    "AUDJPY": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 108.74427,
-        "tp": 106.54242,
-        "entry": 108.034,
-        "rr": 2.09,
-        "timestamp": "2026-01-29T10:33:03.959905"
-    },
     "AUDNZD": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 1.16604,
