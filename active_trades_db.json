@@ -1,12 +1,4 @@
 {
-    "EURNZD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 1.9787,
-        "tp": 1.95251,
-        "entry": 1.97025,
-        "rr": 2.06,
-        "timestamp": "2026-01-29T07:02:07.789061"
-    },
     "GBPNZD": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 2.28428,
