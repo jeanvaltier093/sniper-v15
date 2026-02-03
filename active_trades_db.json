@@ -39,14 +39,6 @@
         "rr": 2.01,
         "timestamp": "2026-01-29T10:49:19.042449"
     },
-    "AUDCAD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 0.95224,
-        "tp": 0.93345,
-        "entry": 0.94618,
-        "rr": 2.04,
-        "timestamp": "2026-01-29T16:03:02.007681"
-    },
     "GBPAUD": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 1.97613,
