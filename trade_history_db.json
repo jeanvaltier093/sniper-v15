@@ -285,5 +285,12 @@
         "Type": "VENTE \ud83d\udd3b",
         "R\u00e9sultat": "\u2705 WIN",
         "RR": 2.1
+    },
+    {
+        "Date": "03/02 20:34",
+        "Actif": "NZDCHF",
+        "Type": "VENTE \ud83d\udd3b",
+        "R\u00e9sultat": "\u274c LOSS",
+        "RR": -1.0
     }
 ]
