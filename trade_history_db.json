@@ -271,5 +271,12 @@
         "Type": "VENTE \ud83d\udd3b",
         "R\u00e9sultat": "\u2705 WIN",
         "RR": 2.06
+    },
+    {
+        "Date": "03/02 15:29",
+        "Actif": "NZDJPY",
+        "Type": "VENTE \ud83d\udd3b",
+        "R\u00e9sultat": "\u274c LOSS",
+        "RR": -1.0
     }
 ]
