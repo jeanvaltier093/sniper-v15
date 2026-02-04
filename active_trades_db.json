@@ -127,14 +127,6 @@
         "rr": 2.04,
         "timestamp": "2026-02-03T13:09:37.748867"
     },
-    "AUDCAD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 0.95889,
-        "tp": 0.94736,
-        "entry": 0.95517,
-        "rr": 2.0,
-        "timestamp": "2026-02-03T15:04:38.698569"
-    },
     "USDCHF": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 0.77925,
