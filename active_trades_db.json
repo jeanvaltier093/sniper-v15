@@ -79,14 +79,6 @@
         "rr": 2.1,
         "timestamp": "2026-01-30T16:53:53.658821"
     },
-    "EURAUD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 1.71425,
-        "tp": 1.68086,
-        "entry": 1.70348,
-        "rr": 2.07,
-        "timestamp": "2026-02-02T10:14:47.272206"
-    },
     "EURUSD": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 1.18788,
