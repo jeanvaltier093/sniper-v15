@@ -167,14 +167,6 @@
         "rr": 2.09,
         "timestamp": "2026-02-04T14:12:34.287111"
     },
-    "NZDJPY": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 94.27607,
-        "tp": 93.99995,
-        "entry": 94.187,
-        "rr": 2.05,
-        "timestamp": "2026-02-04T14:47:34.422068"
-    },
     "GBPJPY": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 214.62845,
