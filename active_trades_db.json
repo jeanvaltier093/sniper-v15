@@ -7,14 +7,6 @@
         "rr": 2.06,
         "timestamp": "2026-01-29T07:02:09.402477"
     },
-    "GBPCAD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 1.87691,
-        "tp": 1.85592,
-        "entry": 1.87014,
-        "rr": 2.05,
-        "timestamp": "2026-01-29T07:49:27.655405"
-    },
     "GBPAUD": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 1.97613,
