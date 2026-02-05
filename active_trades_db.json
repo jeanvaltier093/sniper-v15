@@ -55,14 +55,6 @@
         "rr": 2.04,
         "timestamp": "2026-01-30T13:32:11.349731"
     },
-    "GBPUSD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 1.37881,
-        "tp": 1.35789,
-        "entry": 1.37206,
-        "rr": 2.05,
-        "timestamp": "2026-01-30T16:19:50.898381"
-    },
     "EURUSD": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 1.18788,
