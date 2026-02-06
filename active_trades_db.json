@@ -7,14 +7,6 @@
         "rr": 2.06,
         "timestamp": "2026-01-29T07:02:09.402477"
     },
-    "GBPAUD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 1.97613,
-        "tp": 1.94147,
-        "entry": 1.96495,
-        "rr": 2.07,
-        "timestamp": "2026-01-29T17:49:36.568097"
-    },
     "CADCHF": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 0.57097,
