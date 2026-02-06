@@ -47,14 +47,6 @@
         "rr": 2.04,
         "timestamp": "2026-02-02T14:31:36.147005"
     },
-    "NZDUSD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 0.60683,
-        "tp": 0.5947,
-        "entry": 0.60292,
-        "rr": 2.01,
-        "timestamp": "2026-02-03T11:04:37.924336"
-    },
     "EURCHF": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 0.92095,
