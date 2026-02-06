@@ -159,14 +159,6 @@
         "rr": 2.02,
         "timestamp": "2026-02-05T12:30:43.312088"
     },
-    "GBPCAD": {
-        "type": "VENTE \ud83d\udd3b",
-        "sl": 1.85769,
-        "tp": 1.83571,
-        "entry": 1.8506,
-        "rr": 2.05,
-        "timestamp": "2026-02-05T14:50:16.209307"
-    },
     "BTCUSD": {
         "type": "VENTE \ud83d\udd3b",
         "sl": 66172.95774,
