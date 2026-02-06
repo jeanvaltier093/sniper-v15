@@ -432,5 +432,12 @@
         "Type": "VENTE \ud83d\udd3b",
         "R\u00e9sultat": "\u2705 WIN",
         "RR": 2.01
+    },
+    {
+        "Date": "06/02 07:27",
+        "Actif": "GBPCAD",
+        "Type": "VENTE \ud83d\udd3b",
+        "R\u00e9sultat": "\u274c LOSS",
+        "RR": -1.0
     }
 ]
