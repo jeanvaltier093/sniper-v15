@@ -113,7 +113,7 @@ def get_high_impact_news():
                 news.append({                                
                     "time": datetime.datetime.fromisoformat(e["date"]).replace(tzinfo=datetime.timezone.utc),                                
                     "currency": e["currency"],
-                    "score_val": e.get("score", 0) # Conservé pour compatibilité
+                    "score_val": e.get("score", 0) 
                 })                                
         return news                                
     except:                                
@@ -123,7 +123,7 @@ def is_news_block(pair, news):
     now_utc = datetime.datetime.now(datetime.timezone.utc)                                
     for e in news:                                
         if e["currency"] in pair:                                
-            if abs((e["time"] - now_utc).total_seconds()) < 3600: # 1h pour le swing                                
+            if abs((e["time"] - now_utc).total_seconds()) < 3600: 
                 return True                                
     return False                                
     
@@ -139,14 +139,14 @@ def pip_factor(pair):
 # CONFIG APP                                
 # ─────────────────────────────────────────────                                
 st.set_page_config(page_title="Sniper V17 — Swing Pro", layout="wide")                                
-st_autorefresh(interval=300000, key="refresh") # 5 min pour le swing                                
+st_autorefresh(interval=300000, key="refresh") 
     
 active_trades = load_json(DB_FILE)
 history_trades = load_json(HISTORY_FILE)
     
 ASSETS = {                                
     "FOREX": [                                
-        "EURUSD=X","GBPUSD=X","USDJPY=X","AUDUSD=X","USDCAD=X","USDCHF=X","NZDUSD=X",                                
+        "EURUSD=X","GBPUSD=X","USDJPY=X","AUDUSD=X","USDCAD=X","USDJPY=X","NZDUSD=X",                                
         "EURGBP=X","EURJPY=X","GBPJPY=X","EURAUD=X","EURCAD=X","EURCHF=X","EURNZD=X",                                
         "GBPAUD=X","GBPCAD=X","GBPCHF=X","GBPNZD=X",                                
         "AUDJPY=X","AUDCAD=X","AUDCHF=X","AUDNZD=X",                                
@@ -166,7 +166,6 @@ def run_engine():
     news_today = get_high_impact_news()                                
     tickers = [t for cat in ASSETS.values() for t in cat]                                
                                 
-    # Download optimisé pour SWING
     data_h1  = yf.download(tickers, period="30d", interval="1h", group_by="ticker", progress=False, threads=False)                                
     data_h4  = yf.download(tickers, period="60d", interval="4h", group_by="ticker", progress=False, threads=False)                                
     data_d1  = yf.download(tickers, period="300d", interval="1d", group_by="ticker", progress=False, threads=False)                                
@@ -178,7 +177,7 @@ def run_engine():
 
                 df_h1  = data_h1[ticker].dropna()                                
                 df_h4  = data_h4[ticker].dropna()                                
-                df_d1  = data_d1[ticker].dropna() 
+                df_d1  = data_d1[ticker].dropna()                                
 
                 current_price = round(float(df_h1["Close"].iloc[-1]), 5)
 
@@ -228,7 +227,7 @@ def run_engine():
                     comment = "Hors session" if comment == "-" else comment + " + Hors session"                                
                     session_block = True                                
                                 
-                close = float(df_h1["Close"].iloc[-1]) # Basé sur H1                                
+                close = float(df_h1["Close"].iloc[-1])                                
                 high  = float(df_h1["High"].iloc[-1])                                
                 low   = float(df_h1["Low"].iloc[-1])                                
                                 
@@ -241,7 +240,6 @@ def run_engine():
                 ema200_d = EMAIndicator(df_d1["Close"], 200).ema_indicator().iloc[-1]                                
                 ema50_h4 = EMAIndicator(df_h4["Close"], 50).ema_indicator().iloc[-1]                                
                                 
-                # Box sur H1 (Breakout structure locale)
                 box_high = df_h1["High"].iloc[-24:-1].max()                                
                 box_low  = df_h1["Low"].iloc[-24:-1].min()                                
                 
@@ -260,7 +258,6 @@ def run_engine():
                                 
                 blocked = adx_block or news_block or session_block                                
                                 
-                # Tendance de fond Daily (La boussole)
                 trend_up = close > ema200_d                                
                 h4_ok = close > ema50_h4 if trend_up else close < ema50_h4                                
                                 
@@ -277,26 +274,24 @@ def run_engine():
                 reliability = "-"
                 if score >= 105: reliability = "🔥 ULTIME"
                 elif score >= 95: reliability = "🟥 Exceptionnelle"                                
-                elif score >= 80: reliability = "🟣 Très forte"                                
+                elif score >= 80: reliability = " Purple Très forte"                                
                 elif score >= 65: reliability = "🟢 Solide"                                
                                 
                 signal, sl, tp = "ATTENDRE", None, None                                
                 rr_final = 0                                
                                 
-                # Logique d'entrée Swing (Pas de contre-tendance autorisée)
                 if score >= score_min and not blocked:                                
                     if trend_up and (breakout_up or p_di > m_di):                                
                         signal = "ACHAT 🚀"                                
                         sl = round(min(df_h1["Low"].iloc[-10:].min(), lowest_20d), 5)
-                        # Protection si SL trop proche
                         if (close - sl) < atr_h4: sl = close - (atr_h4 * 1.2)
-                        tp = round(close + (abs(close - sl) * 1.5), 5) # TP UNIQUE 1.5
+                        tp = round(close + (abs(close - sl) * 1.5), 5) 
                         
                     elif not trend_up and (breakout_dn or m_di > p_di):                                
                         signal = "VENTE 🔻"                                
                         sl = round(max(df_h1["High"].iloc[-10:].max(), highest_20d), 5)
                         if (sl - close) < atr_h4: sl = close + (atr_h4 * 1.2)
-                        tp = round(close - (abs(sl - close) * 1.5), 5) # TP UNIQUE 1.5
+                        tp = round(close - (abs(sl - close) * 1.5), 5) 
                                 
                 if sl and tp:                                
                     risk = abs(close - sl)                                
@@ -327,7 +322,7 @@ def run_engine():
                     
                     if score >= 75:
                         send_telegram_msg(                                
-                            f"🦅 SNIPER V17 SWING\n{name} | {signal}\nScore: {score}%\nRR: 1.5 (Unique)\nPrix: {close}\nSL: {sl}\nTP: {tp}"                
+                            f"🦅 SNIPER V17 SWING\n{name} | {signal}\nScore: {score}%\nRR: 1.5\nPrix: {close}\nSL: {sl}\nTP: {tp}"                
                         )                                
                                 
             except: continue                                
@@ -343,11 +338,15 @@ if history_trades:
     st.header("📊 Performance & Statistiques")
     df_hist = pd.DataFrame(history_trades)
     
+    # --- CORRECTION DU KEYERROR ICI ---
+    if "Score_Signal" not in df_hist.columns:
+        df_hist["Score_Signal"] = 0
+    # ----------------------------------
+
     total_trades = len(df_hist)
     win_count = len(df_hist[df_hist["Résultat"] == "✅ WIN"])
     winrate = (win_count / total_trades * 100) if total_trades > 0 else 0
     
-    # Statistiques de Score (Demande utilisateur)
     count_65 = len(df_hist[df_hist["Score_Signal"] >= 65])
     passed_65 = (len(df_hist[(df_hist["Score_Signal"] >= 65) & (df_hist["Résultat"] == "✅ WIN")]) / count_65 * 100) if count_65 > 0 else 0
     
