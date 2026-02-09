@@ -61,5 +61,14 @@
         "rr": 1.5,
         "score_val": 95,
         "timestamp": "2026-02-09T16:13:28.790949"
+    },
+    "GBPAUD": {
+        "type": "VENTE \ud83d\udd3b",
+        "sl": 2.01441,
+        "tp": 1.80523,
+        "entry": 1.93074,
+        "rr": 1.5,
+        "score_val": 75,
+        "timestamp": "2026-02-09T16:13:30.698542"
     }
 }
