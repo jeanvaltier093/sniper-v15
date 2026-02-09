@@ -7,5 +7,14 @@
         "rr": 1.5,
         "score_val": 75,
         "timestamp": "2026-02-09T07:04:21.977465"
+    },
+    "AUDNZD": {
+        "type": "ACHAT \ud83d\ude80",
+        "sl": 1.1519,
+        "tp": 1.19345,
+        "entry": 1.16852,
+        "rr": 1.5,
+        "score_val": 75,
+        "timestamp": "2026-02-09T07:04:23.537164"
     }
 }
