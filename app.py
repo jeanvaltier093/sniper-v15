@@ -56,8 +56,10 @@ def load_json(file):
     if os.path.exists(file):
         try:
             with open(file, "r") as f:
-                return json.load(f)
-        except: return {} if file == DB_FILE else []
+                content = json.load(f)
+                return content if content else ({} if file == DB_FILE else [])
+        except: 
+            return {} if file == DB_FILE else []
     return {} if file == DB_FILE else []
 
 def save_json(file, data):
@@ -82,10 +84,6 @@ def send_telegram_msg(message):
         )                                
     except:                                
         pass                                
-    
-if st.button("📩 Test Telegram"):                                
-    send_telegram_msg("✅ Test Telegram réussi depuis Sniper V17 SWING")                                
-    st.success("Message de test envoyé !")                                
     
 # ─────────────────────────────────────────────                                
 # FILTRE HORAIRE ET JOURS
@@ -146,7 +144,7 @@ history_trades = load_json(HISTORY_FILE)
     
 ASSETS = {                                
     "FOREX": [                                
-        "EURUSD=X","GBPUSD=X","USDJPY=X","AUDUSD=X","USDCAD=X","USDJPY=X","NZDUSD=X",                                
+        "EURUSD=X","GBPUSD=X","USDJPY=X","AUDUSD=X","USDCAD=X","NZDUSD=X",                                
         "EURGBP=X","EURJPY=X","GBPJPY=X","EURAUD=X","EURCAD=X","EURCHF=X","EURNZD=X",                                
         "GBPAUD=X","GBPCAD=X","GBPCHF=X","GBPNZD=X",                                
         "AUDJPY=X","AUDCAD=X","AUDCHF=X","AUDNZD=X",                                
@@ -274,7 +272,7 @@ def run_engine():
                 reliability = "-"
                 if score >= 105: reliability = "🔥 ULTIME"
                 elif score >= 95: reliability = "🟥 Exceptionnelle"                                
-                elif score >= 80: reliability = " Purple Très forte"                                
+                elif score >= 80: reliability = "🟣 Très forte"                                
                 elif score >= 65: reliability = "🟢 Solide"                                
                                 
                 signal, sl, tp = "ATTENDRE", None, None                                
@@ -313,6 +311,7 @@ def run_engine():
                 })                                
                                 
                 if signal in ["ACHAT 🚀", "VENTE 🔻"] and name not in active_trades:
+                    # Application de ta règle personnalisée : Éviter les doublons successifs
                     active_trades[name] = {
                         "type": signal, "sl": round(sl, 5), "tp": round(tp, 5), 
                         "entry": round(close, 5), "rr": round(rr_final, 2), 
@@ -338,10 +337,8 @@ if history_trades:
     st.header("📊 Performance & Statistiques")
     df_hist = pd.DataFrame(history_trades)
     
-    # --- CORRECTION DU KEYERROR ICI ---
     if "Score_Signal" not in df_hist.columns:
         df_hist["Score_Signal"] = 0
-    # ----------------------------------
 
     total_trades = len(df_hist)
     win_count = len(df_hist[df_hist["Résultat"] == "✅ WIN"])
@@ -377,9 +374,22 @@ if data:
 
 with st.sidebar:
     st.info("Mode: Swing Trading (1-4 Jours)")
-    if st.button("🗑 Réinitialiser Verrous"):
-        if os.path.exists(DB_FILE): os.remove(DB_FILE)
-        st.success("Verrous supprimés.")
-    if st.button("🔴 Effacer Historique"):
-        if os.path.exists(HISTORY_FILE): os.remove(HISTORY_FILE)
+    if st.button("📩 Test Telegram"):                                
+        send_telegram_msg("✅ Test Telegram réussi depuis Sniper V17 SWING")                                
+        st.success("Message de test envoyé !")
+    
+    st.markdown("---")
+    st.subheader("⚙️ Maintenance")
+    if st.button("🗑 Réinitialiser Verrous (Active Trades)"):
+        if os.path.exists(DB_FILE): 
+            os.remove(DB_FILE)
+            save_json(DB_FILE, {}) # Recréer un fichier vide
+        st.success("Trades actifs réinitialisés.")
+        st.rerun()
+
+    if st.button("🔴 Effacer Historique (Stats)"):
+        if os.path.exists(HISTORY_FILE): 
+            os.remove(HISTORY_FILE)
+            save_json(HISTORY_FILE, []) # Recréer une liste vide
         st.success("Historique vidé.")
+        st.rerun()
