@@ -7,5 +7,14 @@
         "rr": 1.5,
         "score_val": 95,
         "timestamp": "2026-02-10T07:02:43.683789"
+    },
+    "USDCAD": {
+        "type": "VENTE \ud83d\udd3b",
+        "sl": 1.39237,
+        "tp": 1.30082,
+        "entry": 1.35575,
+        "rr": 1.5,
+        "score_val": 95,
+        "timestamp": "2026-02-10T07:02:45.196881"
     }
 }
