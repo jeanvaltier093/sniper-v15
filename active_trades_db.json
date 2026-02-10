@@ -43,5 +43,14 @@
         "rr": 1.5,
         "score_val": 95,
         "timestamp": "2026-02-10T07:02:50.035476"
+    },
+    "EURCHF": {
+        "type": "VENTE \ud83d\udd3b",
+        "sl": 0.9349,
+        "tp": 0.87817,
+        "entry": 0.91221,
+        "rr": 1.5,
+        "score_val": 75,
+        "timestamp": "2026-02-10T09:50:24.034707"
     }
 }
