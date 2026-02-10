@@ -25,5 +25,14 @@
         "rr": 1.5,
         "score_val": 95,
         "timestamp": "2026-02-10T07:02:46.660763"
+    },
+    "GBPCHF": {
+        "type": "VENTE \ud83d\udd3b",
+        "sl": 1.07969,
+        "tp": 1.00319,
+        "entry": 1.04909,
+        "rr": 1.5,
+        "score_val": 95,
+        "timestamp": "2026-02-10T07:02:48.334365"
     }
 }
