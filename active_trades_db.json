@@ -34,5 +34,14 @@
         "rr": 1.5,
         "score_val": 95,
         "timestamp": "2026-02-10T07:02:48.334365"
+    },
+    "NZDCHF": {
+        "type": "VENTE \ud83d\udd3b",
+        "sl": 0.47071,
+        "tp": 0.45153,
+        "entry": 0.46304,
+        "rr": 1.5,
+        "score_val": 95,
+        "timestamp": "2026-02-10T07:02:50.035476"
     }
 }
