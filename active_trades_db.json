@@ -97,5 +97,14 @@
         "rr": 1.5,
         "score_val": 75,
         "timestamp": "2026-02-11T14:03:16.841591"
+    },
+    "EURAUD": {
+        "type": "VENTE \ud83d\udd3b",
+        "sl": 1.74555,
+        "tp": 1.54958,
+        "entry": 1.66716,
+        "rr": 1.5,
+        "score_val": 75,
+        "timestamp": "2026-02-12T07:35:45.441736"
     }
 }
