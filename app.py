@@ -21,7 +21,7 @@ def sync_to_github(file_path, data):
             return
             
         token = st.secrets["GITHUB_TOKEN"]
-        repo = st.secrets["GITHUB_REPO"] # format: "pseudo/nom-du-depot"
+        repo = st.secrets["GITHUB_REPO"] 
         url = f"https://api.github.com/repos/{repo}/contents/{file_path}"
         headers = {
             "Authorization": f"token {token}",
@@ -57,14 +57,18 @@ def load_json(file):
         try:
             with open(file, "r") as f:
                 content = json.load(f)
-                return content if content else ({} if file == DB_FILE else [])
+                # Assure le bon type de retour selon le fichier
+                if file == DB_FILE:
+                    return content if isinstance(content, dict) else {}
+                else:
+                    return content if isinstance(content, list) else []
         except: 
             return {} if file == DB_FILE else []
     return {} if file == DB_FILE else []
 
 def save_json(file, data):
     with open(file, "w") as f:
-        json.dump(data, f)
+        json.dump(data, f, indent=4)
     sync_to_github(file, data)
 
 # ─────────────────────────────────────────────                                
@@ -137,10 +141,13 @@ def pip_factor(pair):
 # CONFIG APP                                
 # ─────────────────────────────────────────────                                
 st.set_page_config(page_title="Sniper V17 — Swing Pro", layout="wide")                                
-st_autorefresh(interval=300000, key="refresh") 
+st_autorefresh(interval=60000, key="refresh") # Mis à 60s pour un suivi plus réactif
     
-active_trades = load_json(DB_FILE)
-history_trades = load_json(HISTORY_FILE)
+# Initialisation forcée des fichiers au démarrage
+if "init_done" not in st.session_state:
+    active_trades = load_json(DB_FILE)
+    history_trades = load_json(HISTORY_FILE)
+    st.session_state["init_done"] = True
     
 ASSETS = {                                
     "FOREX": [                                
@@ -160,13 +167,18 @@ ASSETS = {
 # MOTEUR PRINCIPAL                                
 # ─────────────────────────────────────────────                                
 def run_engine():                                
+    # RECHARGEMENT SYSTÉMATIQUE POUR PERSISTANCE RÉELLE
+    current_active = load_json(DB_FILE)
+    current_history = load_json(HISTORY_FILE)
+    
     results = []                                
     news_today = get_high_impact_news()                                
     tickers = [t for cat in ASSETS.values() for t in cat]                                
                                 
-    data_h1  = yf.download(tickers, period="30d", interval="1h", group_by="ticker", progress=False, threads=False)                                
-    data_h4  = yf.download(tickers, period="60d", interval="4h", group_by="ticker", progress=False, threads=False)                                
-    data_d1  = yf.download(tickers, period="300d", interval="1d", group_by="ticker", progress=False, threads=False)                                
+    # Téléchargement multi-thread pour rapidité
+    data_h1  = yf.download(tickers, period="30d", interval="1h", group_by="ticker", progress=False)                                
+    data_h4  = yf.download(tickers, period="60d", interval="4h", group_by="ticker", progress=False)                                
+    data_d1  = yf.download(tickers, period="300d", interval="1d", group_by="ticker", progress=False)                                
                                 
     for category, symbols in ASSETS.items():                                
         for ticker in symbols:                                
@@ -177,42 +189,60 @@ def run_engine():
                 df_h4  = data_h4[ticker].dropna()                                
                 df_d1  = data_d1[ticker].dropna()                                
 
+                if df_h1.empty: continue
                 current_price = round(float(df_h1["Close"].iloc[-1]), 5)
 
-                if name in active_trades:
-                    trade = active_trades[name]
-                    is_win, is_loss = False, False
+                # ─────────────────────────────────────────────
+                # SUIVI DES TRADES ACTIFS (TP / SL) - PRIORITÉ 1
+                # ─────────────────────────────────────────────
+                if name in current_active:
+                    trade = current_active[name]
+                    exit_triggered = False
+                    result_text = ""
                     
                     if trade["type"] == "ACHAT 🚀":
-                        if current_price >= trade["tp"]: is_win = True
-                        elif current_price <= trade["sl"]: is_loss = True
-                    else:
-                        if current_price <= trade["tp"]: is_win = True
-                        elif current_price >= trade["sl"]: is_loss = True
+                        if current_price >= trade["tp"]: 
+                            exit_triggered = True
+                            result_text = "✅ WIN"
+                        elif current_price <= trade["sl"]: 
+                            exit_triggered = True
+                            result_text = "❌ LOSS"
+                    else: # VENTE
+                        if current_price <= trade["tp"]: 
+                            exit_triggered = True
+                            result_text = "✅ WIN"
+                        elif current_price >= trade["sl"]: 
+                            exit_triggered = True
+                            result_text = "❌ LOSS"
                     
-                    if is_win or is_loss:
-                        gain_rr = trade["rr"] if is_win else -1.0
-                        history_trades.append({
+                    if exit_triggered:
+                        gain_rr = trade["rr"] if result_text == "✅ WIN" else -1.0
+                        current_history.append({
                             "Date": datetime.datetime.now().strftime("%d/%m %H:%M"),
                             "Actif": name,
                             "Type": trade["type"],
-                            "Résultat": "✅ WIN" if is_win else "❌ LOSS",
+                            "Résultat": result_text,
                             "RR": round(gain_rr, 2),
                             "Score_Signal": trade.get("score_val", 0)
                         })
-                        save_json(HISTORY_FILE, history_trades)
-                        del active_trades[name]
-                        save_json(DB_FILE, active_trades)
+                        save_json(HISTORY_FILE, current_history)
+                        del current_active[name]
+                        save_json(DB_FILE, current_active)
+                        send_telegram_msg(f"🔔 CLÔTURE {name}\nRésultat: {result_text}\nPrix: {current_price}")
                     else:
+                        # Trade toujours en cours, on l'affiche et on passe au suivant
                         results.append({
                             "Actif": name, "Catégorie": category, "Signal": "EN COURS ⏳",
                             "Fiabilité": "-", "Score": "-", "Prix": current_price,
                             "SL Prix": trade["sl"], "SL Pips": round(abs(trade["entry"]-trade["sl"])*pip_factor(name),1),
                             "TP Prix": trade["tp"], "TP Pips": round(abs(trade["tp"]-trade["entry"])*pip_factor(name),1),
-                            "Commentaire": f"Trade déjà actif (Entrée: {trade['entry']})"
+                            "Commentaire": f"Entry: {trade['entry']}"
                         })
                         continue
 
+                # ─────────────────────────────────────────────
+                # ANALYSE NOUVEAUX SIGNAUX
+                # ─────────────────────────────────────────────
                 comment = "-"                                
                 news_block = False              
                 session_block = False              
@@ -226,10 +256,6 @@ def run_engine():
                     session_block = True                                
                                 
                 close = float(df_h1["Close"].iloc[-1])                                
-                high  = float(df_h1["High"].iloc[-1])                                
-                low   = float(df_h1["Low"].iloc[-1])                                
-                                
-                atr_h1 = AverageTrueRange(df_h1["High"], df_h1["Low"], df_h1["Close"], 14).average_true_range().iloc[-1]                                
                 atr_h4 = AverageTrueRange(df_h4["High"], df_h4["Low"], df_h4["Close"], 14).average_true_range().iloc[-1]                                
                                 
                 highest_20d = df_d1["High"].iloc[-21:-1].max()                                
@@ -310,21 +336,22 @@ def run_engine():
                     "Commentaire": comment                                
                 })                                
                                 
-                if signal in ["ACHAT 🚀", "VENTE 🔻"] and name not in active_trades:
-                    # Application de ta règle personnalisée : Éviter les doublons successifs
-                    active_trades[name] = {
+                # ENREGISTREMENT DU NOUVEAU TRADE
+                if signal in ["ACHAT 🚀", "VENTE 🔻"] and name not in current_active:
+                    current_active[name] = {
                         "type": signal, "sl": round(sl, 5), "tp": round(tp, 5), 
                         "entry": round(close, 5), "rr": round(rr_final, 2), 
                         "score_val": score, "timestamp": datetime.datetime.now().isoformat()
                     }
-                    save_json(DB_FILE, active_trades)
+                    save_json(DB_FILE, current_active)
                     
                     if score >= 75:
                         send_telegram_msg(                                
                             f"🦅 SNIPER V17 SWING\n{name} | {signal}\nScore: {score}%\nRR: 1.5\nPrix: {close}\nSL: {sl}\nTP: {tp}"                
                         )                                
                                 
-            except: continue                                
+            except Exception as e: 
+                continue                                
                                 
     return results                                
                                 
@@ -332,6 +359,9 @@ def run_engine():
 # AFFICHAGE STREAMLIT                                
 # ─────────────────────────────────────────────                                
 st.title("🦅 Sniper V17 — Swing Trading Master")                                
+
+# Rechargement pour l'affichage des stats
+history_trades = load_json(HISTORY_FILE)
 
 if history_trades:
     st.header("📊 Performance & Statistiques")
@@ -344,26 +374,11 @@ if history_trades:
     win_count = len(df_hist[df_hist["Résultat"] == "✅ WIN"])
     winrate = (win_count / total_trades * 100) if total_trades > 0 else 0
     
-    count_65 = len(df_hist[df_hist["Score_Signal"] >= 65])
-    passed_65 = (len(df_hist[(df_hist["Score_Signal"] >= 65) & (df_hist["Résultat"] == "✅ WIN")]) / count_65 * 100) if count_65 > 0 else 0
-    
-    count_95 = len(df_hist[df_hist["Score_Signal"] >= 95])
-    passed_95 = (len(df_hist[(df_hist["Score_Signal"] >= 95) & (df_hist["Résultat"] == "✅ WIN")]) / count_95 * 100) if count_95 > 0 else 0
-    
-    count_105 = len(df_hist[df_hist["Score_Signal"] >= 105])
-    passed_105 = (len(df_hist[(df_hist["Score_Signal"] >= 105) & (df_hist["Résultat"] == "✅ WIN")]) / count_105 * 100) if count_105 > 0 else 0
-
     col1, col2, col3 = st.columns(3)
     col1.metric("Winrate Global", f"{round(winrate, 1)}%")
     col2.metric("Total Trades", total_trades)
     col3.metric("Gain RR", f"{round(df_hist['RR'].sum(), 2)} R")
 
-    st.subheader("🎯 Précision par Palier de Score")
-    s1, s2, s3 = st.columns(3)
-    s1.metric("Score ≥ 65", f"{round(passed_65, 1)}% WR", f"{count_65} trades")
-    s2.metric("Score ≥ 95", f"{round(passed_95, 1)}% WR", f"{count_95} trades")
-    s3.metric("Score ≥ 105", f"{round(passed_105, 1)}% WR", f"{count_105} trades")
-    
     with st.expander("Journal des trades"):
         st.table(df_hist.tail(15))
 
@@ -381,15 +396,11 @@ with st.sidebar:
     st.markdown("---")
     st.subheader("⚙️ Maintenance")
     if st.button("🗑 Réinitialiser Verrous (Active Trades)"):
-        if os.path.exists(DB_FILE): 
-            os.remove(DB_FILE)
-            save_json(DB_FILE, {}) # Recréer un fichier vide
+        save_json(DB_FILE, {}) 
         st.success("Trades actifs réinitialisés.")
         st.rerun()
 
     if st.button("🔴 Effacer Historique (Stats)"):
-        if os.path.exists(HISTORY_FILE): 
-            os.remove(HISTORY_FILE)
-            save_json(HISTORY_FILE, []) # Recréer une liste vide
+        save_json(HISTORY_FILE, [])
         st.success("Historique vidé.")
         st.rerun()
