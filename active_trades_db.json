@@ -34,5 +34,14 @@
         "rr": 1.5,
         "score_val": 95,
         "timestamp": "2026-02-17T17:58:39.038104"
+    },
+    "GBPNZD": {
+        "type": "VENTE \ud83d\udd3b",
+        "sl": 2.32606,
+        "tp": 2.11549,
+        "entry": 2.24183,
+        "rr": 1.5,
+        "score_val": 75,
+        "timestamp": "2026-02-17T18:43:01.745800"
     }
 }
