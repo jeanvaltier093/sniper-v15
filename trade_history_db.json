@@ -1,1 +1,10 @@
-[]
+[
+    {
+        "Date": "20/02 08:51",
+        "Actif": "GBPCAD",
+        "Type": "ACHAT \ud83d\ude80",
+        "R\u00e9sultat": "\u274c LOSS",
+        "RR": -1.0,
+        "Score_Signal": 95
+    }
+]
