@@ -43,5 +43,14 @@
         "rr": 1.5,
         "score_val": 95,
         "timestamp": "2026-02-20T08:51:00.607650"
+    },
+    "GBPCAD": {
+        "type": "VENTE \ud83d\udd3b",
+        "sl": 1.88052,
+        "tp": 1.78242,
+        "entry": 1.84128,
+        "rr": 1.5,
+        "score_val": 95,
+        "timestamp": "2026-02-20T08:51:04.240246"
     }
 }
