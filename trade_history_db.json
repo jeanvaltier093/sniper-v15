@@ -6,5 +6,13 @@
         "R\u00e9sultat": "\u274c LOSS",
         "RR": -1.0,
         "Score_Signal": 95
+    },
+    {
+        "Date": "25/02 17:08",
+        "Actif": "GBPUSD",
+        "Type": "ACHAT \ud83d\ude80",
+        "R\u00e9sultat": "\u2705 WIN",
+        "RR": 1.5,
+        "Score_Signal": 85
     }
 ]
