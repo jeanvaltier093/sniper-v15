@@ -22,5 +22,13 @@
         "R\u00e9sultat": "\u274c LOSS",
         "RR": -1.0,
         "Score_Signal": 85
+    },
+    {
+        "Date": "02/03 12:13",
+        "Actif": "EURUSD",
+        "Type": "ACHAT \ud83d\ude80",
+        "R\u00e9sultat": "\u274c LOSS",
+        "RR": -1.0,
+        "Score_Signal": 85
     }
 ]
