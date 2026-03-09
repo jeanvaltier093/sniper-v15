@@ -54,5 +54,13 @@
         "R\u00e9sultat": "\u2705 WIN",
         "RR": 1.5,
         "Score_Signal": 75
+    },
+    {
+        "Date": "09/03 07:18",
+        "Actif": "CADCHF",
+        "Type": "VENTE \ud83d\udd3b",
+        "R\u00e9sultat": "\u274c LOSS",
+        "RR": -1.0,
+        "Score_Signal": 95
     }
 ]
