@@ -46,5 +46,13 @@
         "R\u00e9sultat": "\u274c LOSS",
         "RR": -1.0,
         "Score_Signal": 85
+    },
+    {
+        "Date": "09/03 07:08",
+        "Actif": "EURCAD",
+        "Type": "VENTE \ud83d\udd3b",
+        "R\u00e9sultat": "\u2705 WIN",
+        "RR": 1.5,
+        "Score_Signal": 75
     }
 ]
