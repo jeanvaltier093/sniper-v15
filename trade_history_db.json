@@ -62,5 +62,13 @@
         "R\u00e9sultat": "\u274c LOSS",
         "RR": -1.0,
         "Score_Signal": 95
+    },
+    {
+        "Date": "11/03 14:58",
+        "Actif": "AUDCHF",
+        "Type": "ACHAT \ud83d\ude80",
+        "R\u00e9sultat": "\u2705 WIN",
+        "RR": 1.5,
+        "Score_Signal": 85
     }
 ]
